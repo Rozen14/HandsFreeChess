@@ -3,7 +3,6 @@ import re
 # producing promotions only when user says 'promote', etc.)
 # TODO: check if replacements dict can be reduced
 
-
 # ---------------------------------------------------------
 # Normalize generic commands (excluding castling)
 # ---------------------------------------------------------
@@ -55,33 +54,29 @@ def extract_promotion(text) -> str | None:
 # ---------------------------------------------------------
 # Basic square extraction
 # ---------------------------------------------------------
-# TODO: Check implementation for clarification...
-# def extract_square(text: str) -> str | None:
-#     text_lower = text.lower().strip()
-    
-#     # Try direct square notation first (most common)
-#     match = re.search(r'[a-h][1-8]', text_lower)
-#     if match:
-#         return match.group(0)
-    
-#     # Handle spoken numbers for clarification responses
-#     number_words = {
-#         'one': '1', 'two': '2', 'three': '3', 'four': '4',
-#         'five': '5', 'six': '6', 'seven': '7', 'eight': '8'
-#     }
-    
-#     for word, digit in number_words.items():
-#         # Match patterns like "a one", "h eight"
-#         pattern = r'([a-h])\s+' + word + r'\b'
-#         match = re.search(pattern, text_lower)
-#         if match:
-#             return f"{match.group(1)}{digit}"
-    
-#     return None
-
-def extract_square(text) -> str | None:
+def extract_square(text: str) -> str | None:
     match = re.search(r"[a-h][1-8]", text)
     return match.group(0) if match else None
+
+def extract_square_disambiguation(text: str) -> str | None:
+    text_lower = text.lower().strip()
+    match = extract_square(text_lower)
+    if match:
+        return match
+    
+    number_words = {
+        'one': '1', 'two': '2', 'three': '3', 'four': '4',
+        'five': '5', 'six': '6', 'seven': '7', 'eight': '8'
+    }
+    
+    for word, digit in number_words.items():
+        # Match patterns like "a one", "h eight"
+        pattern = r'([a-h])\s+' + word + r'\b'
+        match = re.search(pattern, text_lower)
+        if match:
+            return f"{match.group(1)}{digit}"
+    
+    return None
 
 
 # ---------------------------------------------------------

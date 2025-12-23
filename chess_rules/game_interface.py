@@ -13,6 +13,52 @@ class GameState:
         # Update validator's board reference
         self.validator.board = self.board
     
+    def parse_castling_intent(self, text: str) -> str | None | tuple[str, list[str]]:
+        
+        text_lower = text.lower()
+        
+        # These work regardless of color
+        if any(phrase in text_lower for phrase in ["queenside", "long", "o-o-o", "0-0-0"]):
+            return "O-O-O"
+        
+        if any(phrase in text_lower for phrase in ["kingside", "short", "o-o", "0-0"]):
+            return "O-O"
+        
+        # Directional indicators
+        if "left" in text_lower:
+            # From white's perspective: left = queenside
+            # From black's perspective: left = kingside
+            if self.player_color == chess.WHITE:
+                return "O-O-O"  # Queenside
+            else:
+                return "O-O"    # Kingside
+        
+        if "right" in text_lower:
+            # From white's perspective: right = kingside
+            # From black's perspective: right = queenside
+            if self.player_color == chess.WHITE:
+                return "O-O"    # Kingside
+            else:
+                return "O-O-O"  # Queenside
+            
+        # Generic "castle" - check what's available
+        if "castle" in text_lower or "castling" in text_lower:
+            kingside_legal = self.validator.is_legal("O-O")
+            queenside_legal = self.validator.is_legal("O-O-O")
+            
+            if kingside_legal and queenside_legal:
+                # Both available - need clarification
+                return ("ambiguous", ["O-O", "O-O-O"])
+            elif kingside_legal:
+                return "O-O"
+            elif queenside_legal:
+                return "O-O-O"
+            else:
+                # No castling available
+                return None
+            
+        return None
+    
     def play_move(self, move: str) -> tuple[bool, str]:
         """Apply a SAN or UCI move (e.g., 'Nf3' or 'g1f3')."""
         is_valid, error = self.validator.validate_move(move)

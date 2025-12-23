@@ -1,6 +1,7 @@
 import chess
 from typing import Optional, List, Tuple
 # TODO: Add clarifications/comments etc.
+# TODO: (Optional) add chess 960 and variants
 
 class MoveClarifier:
     def __init__(self, board: chess.Board):
