@@ -2,6 +2,7 @@ import re
 # TODO: (Optional) make parser more strict (ie. detecting invalid promotions, 
 # producing promotions only when user says 'promote', etc.)
 # TODO: check if replacements dict can be reduced
+# TODO: check if extract square functions can be reduced/unified
 
 # ---------------------------------------------------------
 # Normalize generic commands (excluding castling)

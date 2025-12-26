@@ -13,6 +13,7 @@ class GameState:
         # Update validator's board reference
         self.validator.board = self.board
     
+    # TODO: reduce return types to max 2...
     def parse_castling_intent(self, text: str) -> str | None | tuple[str, list[str]]:
         
         text_lower = text.lower()

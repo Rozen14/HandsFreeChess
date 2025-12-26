@@ -4,6 +4,7 @@ from voice_input import move_parser as mp
 from voice_input import speech_to_text as SpeechRecognizer
 from voice_output.text_to_speech import TextToSpeech
 import os
+# TODO: Remove redundant tts.speak...
 
 # Global game state and TTS
 game = None
@@ -45,8 +46,32 @@ def handle_clarification(text: str) -> bool:
     # TODO: check/define scope of function (if it will work only for ambiguity or also for illegal moves...)
     global waiting_for_clarification, pending_move
     
+    if pending_move == "castle":
+        text_lower = text.lower()
+        
+        if any(word in text_lower for word in ["kingside", "short", "king"]):
+            castle_move = "O-O"
+        elif any(word in text_lower for word in ["queenside", "long", "queen"]):
+            castle_move = "O-O-O"
+        else:
+            tts.speak("Please say kingside or queenside.")
+            return True  # Stay in clarification mode   
+        
+        success, error = game.play_move(castle_move)
+                        
+        if success: 
+            side = "queenside" if castle_move == "O-O-O" else "kingside"
+            # TODO: Add logic for actually castling...
+            tts.speak(f"Castled {side}")
+            waiting_for_clarification = False
+            pending_move = None
+        else:
+            tts.speak("Cannot castle on that side.")
+            waiting_for_clarification = False
+            pending_move = None
+    
     # TODO: check implementation inside move_parser.py
-    from_square = mp.extract_square(text) 
+    from_square = mp.extract_square_disambiguation(text) 
     
     if from_square:
         success, error = game.handle_ambiguous_move(pending_move, from_square)
@@ -69,14 +94,14 @@ def handle_clarification(text: str) -> bool:
         tts.speak("I didn't understand. Please say the square, like 'a1' or 'h8'.")
         return True
     
-    return ...
+    return True
 
 
 def handle_speech(text: str):
     """Process recognized speech and execute chess commands."""
     intent_type = intent.predict(text)
     
-    if intent_type == "move" or intent_type == "uci_move":
+    if intent_type == "move":
         parsed_move = mp.parse_move(text)
         
         if not parsed_move:
@@ -96,7 +121,54 @@ def handle_speech(text: str):
             # game.handle_ambiguous_move(parsed_move, from_square)
         else:
             tts.speak("Invalid move")
+    
+    elif intent_type == "castle":
+        castle_result = game.parse_castling_intent(text)
         
+        if castle_result is None:
+            tts.speak("Castling is not legal in this position.")
+            return True
+        
+        # Check if ambiguous
+        if isinstance(castle_result, tuple) and castle_result[0] == "ambiguous":
+            # Both castling options available - ask for clarification
+            tts.speak("Which side? Kingside or queenside?")
+            waiting_for_clarification = True
+            pending_move = "castle"
+            return True
+        
+        success, error = game.play_move(castle_result)
+        
+        if success:
+            side = "queenside" if castle_result == "O-O-O" else "kingside"
+            tts.speak(f"Castled {side}")
+        else:
+            tts.speak("Cannot castle.")
+        
+    # elif intent_type == "resign":
+        # tts.speak("Resigning game.")
+        # # TODO: Implement resign logic
+        # return False
+        
+    # elif intent_type == "draw":
+        # tts.speak("Offering draw.")
+        # TODO: Implement draw offer logic (also accepting draw logic...)
+        
+    # elif intent_type == "new_game":
+        # game.board.reset()
+        # tts.speak("Starting new game.")
+        # TODO: Implement logic for actually searching new game
+        
+    # elif intent_type == "rematch":
+        # TODO: Implement logic for offering/accepting rematch
+        
+    # elif intent_type == "repeat":
+        # TODO: Implement repeat last announcement
+        # tts.speak(last_announcement)
+    
+    # else:
+        # tts.speak("I didn't understand that command.")
+    
     # TODO: Handle other intents...
     # if intent_type == "":
     

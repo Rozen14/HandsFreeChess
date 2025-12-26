@@ -2,6 +2,8 @@ from faster_whisper import WhisperModel
 import speech_recognition as sr
 import os
 from typing import Optional, Callable
+# TODO: migrate to compartmentalization, 
+# add interface for microphone selection
 
 # ------------------------------------------------
 chosen_mic = "Micrófono (Realtek HD Audio Mic input)"

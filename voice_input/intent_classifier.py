@@ -1,5 +1,5 @@
 from sentence_transformers import SentenceTransformer, util
-
+# TODO: Add missing intents such as check material, and others
 class IntentClassifier:
     def __init__(self) -> None:
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -48,7 +48,8 @@ class IntentClassifier:
                 "repeat that",
                 "what did you say",
                 "say it again",
-            ],            
+            ],    
+                    
         }
         
         # Pre-embed the examples 
