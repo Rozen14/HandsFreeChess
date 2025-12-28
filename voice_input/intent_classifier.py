@@ -1,5 +1,6 @@
 from sentence_transformers import SentenceTransformer, util
-# TODO: Add missing intents such as check material, and others
+# TODO: Add missing intents such as time, am I in check (?), 
+# current board position (?), others...
 class IntentClassifier:
     def __init__(self) -> None:
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -49,7 +50,21 @@ class IntentClassifier:
                 "what did you say",
                 "say it again",
             ],    
-                    
+            "material": [
+                "check material",
+                "material count",
+                "what's the material",
+                "who is up material",
+                "material balance",
+                "how many pieces do i have",
+                "what pieces are left"
+            ],
+            "time": [
+                
+            ],
+            "positions": [
+                
+            ]
         }
         
         # Pre-embed the examples 

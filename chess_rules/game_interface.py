@@ -13,8 +13,7 @@ class GameState:
         # Update validator's board reference
         self.validator.board = self.board
     
-    # TODO: reduce return types to max 2...
-    def parse_castling_intent(self, text: str) -> str | None | tuple[str, list[str]]:
+    def parse_castling_intent(self, text: str) -> str | None:
         
         text_lower = text.lower()
         
@@ -49,7 +48,7 @@ class GameState:
             
             if kingside_legal and queenside_legal:
                 # Both available - need clarification
-                return ("ambiguous", ["O-O", "O-O-O"])
+                return "ambiguous"
             elif kingside_legal:
                 return "O-O"
             elif queenside_legal:
@@ -76,7 +75,6 @@ class GameState:
         return (False, "execution_failed")
     
     def handle_ambiguous_move(self, move: str, from_square: str) -> tuple[bool, str]:
-        
         resolved_move = self.validator.resolve_ambiguous_move(move, from_square)
         
         if resolved_move:
@@ -84,8 +82,7 @@ class GameState:
         
         return (False, "invalid_square")
     
-    def get_disambiguation_prompt(self, move: str) -> str:
-        
+    def get_disambiguation_prompt(self, move: str) -> str:        
         return self.validator.get_clarification_prompt(move)
     
     def material_balance(self) -> int:
@@ -122,7 +119,23 @@ class GameState:
             return "Black wins"
         else:
             return "Draw"
-        
+    
+    def material_summary(self):
+        def count(color):
+            return {
+                "pawns": len(self.board.pieces(chess.PAWN, color)),
+                "knights": len(self.board.pieces(chess.KNIGHT, color)),
+                "bishops": len(self.board.pieces(chess.BISHOP, color)),
+                "rooks": len(self.board.pieces(chess.ROOK, color)),
+                "queens": len(self.board.pieces(chess.QUEEN, color))
+            }
+            
+            
+        return {
+            "white": count(chess.WHITE),
+            "black": count(chess.BLACK),
+            "balance": self.material_balance()  
+        }
         
 # ---------------------------------------------------------
 # CHESS.COM ADAPTER (stub until API access is granted)

@@ -1,5 +1,4 @@
 import pyttsx3
-# TODO: (Optional) Add functions for raising/lowering volume...
 
 class TextToSpeech:
     def __init__(self, rate=180, volume=1.0):
@@ -11,5 +10,7 @@ class TextToSpeech:
         self.engine.say(text)
         self.engine.runAndWait()
         
+    def change_volume(self, new_volume: int): 
+        self.engine.setProperty("volume", new_volume)
     
-        
+    

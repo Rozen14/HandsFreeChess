@@ -2,61 +2,8 @@ from faster_whisper import WhisperModel
 import speech_recognition as sr
 import os
 from typing import Optional, Callable
-# TODO: migrate to compartmentalization, 
-# add interface for microphone selection
-
-# ------------------------------------------------
-chosen_mic = "Micrófono (Realtek HD Audio Mic input)"
-chosen_mic = "Micrófono externo (Realtek(R) Audio)"
-os.environ["PATH"] += os.pathsep + r"C:\ffmpeg\ffmpeg-8.0.1-essentials_build\bin"
-# ------------------------------------------------
-
-# Find mic index
-mic_index = 1
-for index, name in enumerate(sr.Microphone.list_microphone_names()):
-    if chosen_mic in name:
-        mic_index = index    
-    
-print("Selected index:", mic_index)
-
-if mic_index is not None:
-    mic = sr.Microphone(device_index=mic_index)
-else:
-    mic = sr.Microphone() # Fallback to default device
-    
-r = sr.Recognizer()
-model = WhisperModel(
-    "Systran/faster-whisper-tiny.en", 
-    device="cpu", 
-    compute_type="int8",
-    cpu_threads=4,
-    num_workers=1
-)
-
-while True:
-    with mic as source:
-        r.adjust_for_ambient_noise(source)
-        print("Speak...")
-        audio = r.listen(source, phrase_time_limit=4)
-
-    wav_data = audio.get_wav_data()
-
-    with open("temp.wav", "wb") as f:
-        f.write(wav_data)
-
-    segments, info = model.transcribe(
-        "temp.wav", 
-        vad_filter=True, 
-        vad_parameters={"min_silence_duration_ms": 250},
-        beam_size=1,
-        best_of=1
-    )
-
-    text = "".join(segment.text for segment in segments)
-    
-    if text:
-        print("You said:", text)
-
+# TODO: add interface for microphone selection
+# TODO: Remove prints for proper logging (if necessary)
 class SpeechRecognizer:
     # TODO: Enhance speed and accuracy (maybe train own specialized model for chess-specific commands(?))
     # TODO: Change logic for chosen mic
@@ -179,6 +126,18 @@ class SpeechRecognizer:
         return mics
     
     @staticmethod
+    def get_default_microphone() -> int | None:
+        """
+        Get the system's default microphone index.
+        
+        Returns:
+            Default microphone index, or None to use speech_recognition's default
+        """
+        # speech_recognition uses None to indicate system default
+        # TODO: Enhance to detect actual default 
+        return None
+    
+    @staticmethod
     def find_mic_index(mic_name: str) -> Optional[int]:
         """
         Find microphone index by name (supports partial matching).
@@ -193,3 +152,21 @@ class SpeechRecognizer:
             if mic_name in name:
                 return index
         return None
+    
+    @staticmethod
+    def find_mic_by_index(mic_index: int) -> str | None:
+        """
+        Get microphone name by index.
+        
+        Args:
+            mic_index: Microphone index
+            
+        Returns:
+            Microphone name or None if index is invalid
+        """
+        try:
+            mics = sr.Microphone.list_microphone_names()
+            return mics[mic_index] if 0 <= mic_index < len(mics) else None
+        except:
+            return None
+    

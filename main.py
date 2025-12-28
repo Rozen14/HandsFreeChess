@@ -5,6 +5,7 @@ from voice_input import speech_to_text as SpeechRecognizer
 from voice_output.text_to_speech import TextToSpeech
 import os
 # TODO: Remove redundant tts.speak...
+# TODO: Remove prints for proper logging...
 
 # Global game state and TTS
 game = None
@@ -27,19 +28,25 @@ def setup_microphone():
     
     chosen_mic = input("Enter microphone name (or press Enter for default): ").strip()
     
-    if not chosen_mic:
-        chosen_mic = "Micrófono externo (Realtek(R) Audio)"
-        print(f"Using default: {chosen_mic}")
-    
-    mic_index = SpeechRecognizer.find_mic_index(chosen_mic)
-    
-    if mic_index is None:
-        print(f"Warning: '{chosen_mic}' not found, using default microphone")
+    if chosen_mic:
+        mic_index = SpeechRecognizer.find_mic_index(chosen_mic)
+        
+        if mic_index is not None:
+            print(f"✓ Microphone found at index {mic_index}")
+        else:
+            print(f"⚠ Warning: '{chosen_mic}' not found")
+            print("  Using system default microphone")
+            mic_index = None  # Explicitly use system default
     else:
-        print(f"⚠ Warning: '{chosen_mic}' not found")
-        print("  Using system default microphone")
+        # User pressed Enter - use system default
+        print("Using system default microphone")
+        mic_index = None
     
     return mic_index
+
+
+def setup_tts(rate=180, volume=1.0) -> TextToSpeech:
+    return TextToSpeech(rate, volume)
 
 
 def handle_clarification(text: str) -> bool:
@@ -130,7 +137,7 @@ def handle_speech(text: str):
             return True
         
         # Check if ambiguous
-        if isinstance(castle_result, tuple) and castle_result[0] == "ambiguous":
+        if castle_result == "ambiguous":
             # Both castling options available - ask for clarification
             tts.speak("Which side? Kingside or queenside?")
             waiting_for_clarification = True
@@ -162,10 +169,17 @@ def handle_speech(text: str):
     # elif intent_type == "rematch":
         # TODO: Implement logic for offering/accepting rematch
         
-    # elif intent_type == "repeat":
+    elif intent_type == "repeat":
         # TODO: Implement repeat last announcement
-        # tts.speak(last_announcement)
+        
+        tts.speak(...)
     
+    elif intent_type == "material":
+        ...
+    
+    # elif intent_type == "time": 
+        
+        
     # else:
         # tts.speak("I didn't understand that command.")
     
@@ -186,8 +200,15 @@ def main():
         phrase_time_limit=4
     )
     
+    # Initialize text to speech
+    tts = setup_tts(rate=180, volume=1.0)
+    
+    # Initialize game
+    # TODO: finish initialization of game...
+    # (keep in mind rematches etc.)
+    
     print("\nVoice Chess Interface Started")
-    print("Say 'stop' to exit\n")
+    print("Say 'stop' to exit\n") # TODO: Implement exit
     
     try:
         recognizer.listen_loop(callback=handle_speech)
