@@ -60,11 +60,26 @@ class IntentClassifier:
                 "what pieces are left"
             ],
             "time": [
-                
+                # User's time
+                "what's my time",
+                "how much time do i have",
+                "how much time is left",
+                "my remaining time",
+                "check my clock",                
+                # Opponent's time
+                "what's your time",
+                "what's opponent time",
+                "how much time does my opponent have",
+                "opponent remaining time",
+                # Both times
+                "what's the time situation",
+                "check the clocks",
+                "how much time do we have",
+                "time left"
             ],
             "positions": [
                 
-            ]
+            ],
         }
         
         # Pre-embed the examples 

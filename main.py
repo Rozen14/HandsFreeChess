@@ -204,6 +204,7 @@ def main():
     tts = setup_tts(rate=180, volume=1.0)
     
     # Initialize game
+    game = gi()
     # TODO: finish initialization of game...
     # (keep in mind rematches etc.)
     
