@@ -1,6 +1,8 @@
 from sentence_transformers import SentenceTransformer, util
 # TODO: Add missing intents such as time, am I in check (?), 
 # current board position (?), others...
+# TODO: Maybe add more colloquial examples so it can understand slang (?)
+
 class IntentClassifier:
     def __init__(self) -> None:
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -86,6 +88,7 @@ class IntentClassifier:
         self.intent_embeddings = {
             intent: self.model.encode(examples, convert_to_tensor=True)
             for intent, examples in self.intents.items()
+            if examples
         }
     
     def predict(self, text: str, threshold: float = 0.5) -> None | str:

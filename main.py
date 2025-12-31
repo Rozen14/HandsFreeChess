@@ -1,7 +1,7 @@
 from chess_rules import game_interface as gi
 from voice_input import intent_classifier as intent
 from voice_input import move_parser as mp
-from voice_input import speech_to_text as SpeechRecognizer
+from voice_input import speech_to_text as stt
 from voice_output.text_to_speech import TextToSpeech
 import os
 # TODO: Remove redundant tts.speak...
@@ -23,18 +23,18 @@ def setup_ffmpeg():
 def setup_microphone():
     """Configure and return microphone index."""
     print("Available microphones:")
-    SpeechRecognizer.list_microphones()
+    stt.list_microphones()
     print()
     
-    chosen_mic = input("Enter microphone name (or press Enter for default): ").strip()
+    mic_index = int(input("Enter microphone index (or press Enter for default): ").strip())
     
-    if chosen_mic:
-        mic_index = SpeechRecognizer.find_mic_index(chosen_mic)
+    if mic_index:
+        chosen_mic = stt.find_mic_by_index(mic_index)        
         
-        if mic_index is not None:
+        if chosen_mic is not None:
             print(f"✓ Microphone found at index {mic_index}")
         else:
-            print(f"⚠ Warning: '{chosen_mic}' not found")
+            print(f"⚠ Warning: No microphone found at index '{mic_index}'.")
             print("  Using system default microphone")
             mic_index = None  # Explicitly use system default
     else:
@@ -106,7 +106,7 @@ def handle_clarification(text: str) -> bool:
 
 def handle_speech(text: str):
     """Process recognized speech and execute chess commands."""
-    intent_type = intent.predict(text)
+    intent_type = intent.IntentClassifier.predict(text)
     
     if intent_type == "move":
         parsed_move = mp.parse_move(text)
@@ -195,7 +195,7 @@ def main():
     mic_index = setup_microphone()
     
     # Initialize speech recognizer
-    recognizer = SpeechRecognizer(
+    recognizer = stt.SpeechRecognizer(
         mic_index=mic_index,
         phrase_time_limit=4
     )
@@ -204,8 +204,9 @@ def main():
     tts = setup_tts(rate=180, volume=1.0)
     
     # Initialize game
-    game = gi()
+    game = gi.GameState()
     # TODO: finish initialization of game...
+    # If user moves second, wait until opponent makes move, etc.
     # (keep in mind rematches etc.)
     
     print("\nVoice Chess Interface Started")
@@ -213,6 +214,7 @@ def main():
     
     try:
         recognizer.listen_loop(callback=handle_speech)
+        # TODO: Adjust listening time/stopping toggle
     except KeyboardInterrupt:
         print("\nStopping...")
     finally:

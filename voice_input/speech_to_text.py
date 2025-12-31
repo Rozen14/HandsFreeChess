@@ -2,8 +2,79 @@ from faster_whisper import WhisperModel
 import speech_recognition as sr
 import os
 from typing import Optional, Callable
+import logging # TODO: Remove prints for proper logging 
 # TODO: add interface for microphone selection
-# TODO: Remove prints for proper logging (if necessary)
+
+
+def list_microphones():
+    """List all available microphones with their indices."""
+    import pyaudio 
+    
+    p = pyaudio.PyAudio()
+    microphones = []
+    try:
+        for i in range(p.get_device_count()):
+            try:
+                info = p.get_device_info_by_index(i)
+                
+                # Only show devices with input channels (actual microphones)
+                if info.get('maxInputChannels', 0) > 0:
+                    microphones.append((i, info['name']))
+                    print(f"{i}: {info['name']}")
+            except (OSError, IOError):
+                # Skip devices that can't be queried
+                continue
+    finally:
+        p.terminate()
+    
+    return microphones
+    
+    
+def get_default_microphone() -> int | None:
+    """
+    Get the system's default microphone index.
+    
+    Returns:
+        Default microphone index, or None to use speech_recognition's default
+    """
+    # speech_recognition uses None to indicate system default
+    # TODO: Enhance to detect actual default 
+    return None
+
+
+def find_mic_index(mic_name: str) -> Optional[int]:
+    """
+    Find microphone index by name (supports partial matching).
+    
+    Args:
+        mic_name: Full or partial name of the microphone
+        
+    Returns:
+        Microphone index or None if not found
+    """
+    for index, name in enumerate(sr.Microphone.list_microphone_names()):
+        if mic_name in name:
+            return index
+    return None
+
+    
+def find_mic_by_index(mic_index: int) -> str | None:
+    """
+    Get microphone name by index.
+    
+    Args:
+        mic_index: Microphone index
+        
+    Returns:
+        Microphone name or None if index is invalid
+    """
+    try:
+        mics = sr.Microphone.list_microphone_names()
+        return mics[mic_index] if 0 <= mic_index < len(mics) else None
+    except:
+        return None
+
+
 class SpeechRecognizer:
     # TODO: Enhance speed and accuracy (maybe train own specialized model for chess-specific commands(?))
     # TODO: Change logic for chosen mic
@@ -33,13 +104,20 @@ class SpeechRecognizer:
         self.vad_min_silence = vad_min_silence
         
         # Initialize microphone
-        if mic_index is not None:
-            self.mic = sr.Microphone(device_index=mic_index)
-        else:
-            self.mic = sr.Microphone()
-        
+        try: 
+            if mic_index is not None:
+                self.mic = sr.Microphone(device_index=mic_index)
+            else:
+                self.mic = sr.Microphone()
+        except OSError as e:
+            raise RuntimeError("No microphone found or microphone unavailable") from e
+            
         # Initialize recognizer
         self.recognizer = sr.Recognizer()
+        self.recognizer.dynamic_energy_threshold = False
+        self.recognizer.energy_threshold = 150
+        self.recognizer.pause_threshold = 0.6
+        self.recognizer.non_speaking_duration = 0.4
         
         # Initialize Whisper model
         self.model = WhisperModel(
@@ -49,6 +127,11 @@ class SpeechRecognizer:
             cpu_threads=4,
             num_workers=1
         )
+        
+        # Calibrate ambient noice ONCE
+        with self.mic as source:
+            print("Calibrating microphone...")
+            self.recognizer.adjust_for_ambient_noise(source, duration=1.0)
         
         print(f"Speech recognizer initialized with mic index: {mic_index}")
         
@@ -61,32 +144,32 @@ class SpeechRecognizer:
         """
         try:
             with self.mic as source:
-                self.recognizer.adjust_for_ambient_noise(source)
                 print("Listening...")
                 audio = self.recognizer.listen(
-                    source, 
-                    phrase_time_limit=self.phrase_time_limit
+                    source,
+                    timeout=5,               # wait for speech
+                    phrase_time_limit=self.phrase_time_limit      # max length of command
                 )
-            
-            # Save audio to temp file
+
             wav_data = audio.get_wav_data()
             with open("temp.wav", "wb") as f:
                 f.write(wav_data)
-            
-            # Transcribe
+
             segments, info = self.model.transcribe(
                 "temp.wav",
                 vad_filter=True,
-                vad_parameters={"min_silence_duration_ms": self.vad_min_silence},
+                vad_parameters={
+                    "min_silence_duration_ms": 300
+                },
                 beam_size=1,
                 best_of=1
             )
-            
+
             text = "".join(segment.text for segment in segments).strip()
             return text if text else None
-            
+
         except Exception as e:
-            print(f"Error during speech recognition: {e}")
+            print(f"Speech recognition error: {e}")
             return None
         
     def listen_loop(self, callback: Optional[Callable[[str], None]] = None):
@@ -117,56 +200,4 @@ class SpeechRecognizer:
             except Exception as e:
                 print(f"Could not remove temp.wav: {e}")
     
-    @staticmethod
-    def list_microphones():
-        """List all available microphones with their indices."""
-        mics = sr.Microphone.list_microphone_names()
-        for index, name in enumerate(mics):
-            print(f"{index}: {name}")
-        return mics
-    
-    @staticmethod
-    def get_default_microphone() -> int | None:
-        """
-        Get the system's default microphone index.
-        
-        Returns:
-            Default microphone index, or None to use speech_recognition's default
-        """
-        # speech_recognition uses None to indicate system default
-        # TODO: Enhance to detect actual default 
-        return None
-    
-    @staticmethod
-    def find_mic_index(mic_name: str) -> Optional[int]:
-        """
-        Find microphone index by name (supports partial matching).
-        
-        Args:
-            mic_name: Full or partial name of the microphone
-            
-        Returns:
-            Microphone index or None if not found
-        """
-        for index, name in enumerate(sr.Microphone.list_microphone_names()):
-            if mic_name in name:
-                return index
-        return None
-    
-    @staticmethod
-    def find_mic_by_index(mic_index: int) -> str | None:
-        """
-        Get microphone name by index.
-        
-        Args:
-            mic_index: Microphone index
-            
-        Returns:
-            Microphone name or None if index is invalid
-        """
-        try:
-            mics = sr.Microphone.list_microphone_names()
-            return mics[mic_index] if 0 <= mic_index < len(mics) else None
-        except:
-            return None
     

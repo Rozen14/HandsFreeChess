@@ -5,7 +5,7 @@ from chess_rules import move_validator as mv
 class GameState:
     def __init__(self) -> None:
         self.board = chess.Board()
-        self.validator = mv(self.board)
+        self.validator = mv.MoveClarifier(self.board)
     
     def update_from_fen(self, fen: str) -> None:
         """Updates the internal board state."""

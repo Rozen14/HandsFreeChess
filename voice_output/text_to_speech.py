@@ -12,5 +12,3 @@ class TextToSpeech:
         
     def change_volume(self, new_volume: int): 
         self.engine.setProperty("volume", new_volume)
-    
-    
