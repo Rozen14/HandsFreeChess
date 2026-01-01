@@ -184,13 +184,15 @@ class SpeechRecognizer:
         while True:
             text = self.listen_once()
             
-            if text:
-                if callback:
-                    # If callback returns False, stop the loop
-                    if callback(text) == False:
-                        break
-                else:
-                    print(f"You said: {text}")
+            if not text:
+                continue
+            
+            if callback(text):
+                # If callback returns False, stop the loop
+                if callback(text) is False:
+                    break
+            else:
+                print(f"You said: {text}")
                     
     def cleanup(self):
         """Clean up temporary files."""

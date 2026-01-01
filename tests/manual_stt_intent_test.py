@@ -13,4 +13,4 @@ while True:
     print("Heard: ", text)
     print("Intent: ", intent.predict(text))
     
-# python -m tests.test_manual_stt_intent
+# python -m tests.manual_stt_intent_test.py

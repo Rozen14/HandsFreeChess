@@ -84,4 +84,7 @@ class MoveAnnouncer:
         else:
             return
         
+    def announce_opponent_move(self, move_san: str, opponent_color: str) -> str:
+        # TODO: implement
+        pass
     
