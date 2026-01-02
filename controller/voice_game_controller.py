@@ -49,6 +49,13 @@ class GameController:
         intent_type = self.intent_classifier.predict(text)
         print(f"Intent: {intent_type}")
         
+        # Fallback: If intent is None but move_parser can parse it, assume it's a move
+        if intent_type is None:
+            parsed_move = mp.parse_move(text)
+            if parsed_move:
+                print(f"Fallback: Detected as move")
+                return self._handle_move(text)
+        
         # Route to appropriate handler
         if intent_type == "move":
             return self._handle_move(text)
@@ -64,6 +71,8 @@ class GameController:
             return self._handle_rematch()
         elif intent_type == "repeat":
             return self._handle_repeat()
+        elif intent_type == "positions":
+            return self._handle_positions()
         else:
             self.tts.speak("I didn't understand that command.")
             return True
@@ -140,16 +149,60 @@ class GameController:
         return True
     
     def _handle_clarification(self, text: str) -> bool:
-        """ """
+        """ Handle clarification responses (disambiguation or castling side)."""
         
         # Castling side clarification
         if self.pending_move == "castle":
             text_lower = text.lower()
 
-        # TODO: finish...
+            if any(word in text_lower for word in ["kingside", "short", "king"]):
+                castle_move = "O-O"
+            elif any(word in text_lower for word in ["queenside", "long", "queen"]):
+                castle_move = "O-O-O"
+            else:
+                self.tts.speak("Please say kingside or queenside.")
+                return True
+                
+            success, _ = self.game.play_move(castle_move)
             
-        pass
-    
+            if success:
+                side = "queenside" if castle_move == "O-O-O" else "kingside"
+                self.tts.speak(f"Castled {side}")
+            else:
+                self.tts.speak("Cannot castle...")
+            
+            # Exit clarification mode
+            self.waiting_for_clarification = False
+            self.pending_move = None
+            return True 
+        
+        from_square = mp.extract_square_disambiguation(text)
+        
+        # Move disambiguation clarification
+        if not from_square:
+            self.tts.speak("I didn't understand. Please say the square, like 'a1' or 'h8'.")                               
+            return True
+        
+        success, _ = self.game.handle_ambiguous_move(self.pending_move, from_square)
+        
+        if success:
+            self.tts.speak(f"Moved {self.pending_move} from {from_square}")
+            
+            # Exit clarification mode
+            self.waiting_for_clarification = False
+            self.pending_move = None
+            
+            # Check game state
+            if self.game.is_game_over():
+                # TODO: Add reason as 2nd param
+                result_text = self.announcer.announce_game_over(self.game.get_result(), ...)
+                self.tts.speak(result_text)
+                return False
+        else:
+            self.tts.speak("That square doesn't match any legal move. Please try again.")
+        
+        return True
+            
     def _handle_resign(self) -> bool:
         """"""
         pass
@@ -168,10 +221,24 @@ class GameController:
     
     def _handle_repeat(self) -> bool:
         """"""
+        if self.last_announcement:
+            self.tts.speak(self.last_announcement)
+        else:
+            self.tts.speak("Nothing to repeat.")
+        return True
+    
+    def _handle_positions(self) -> bool:
+        """"""
         pass
     
     def announce_opponent_move(self, move_san: str, opponent_color: str) -> None:
-        """"""
+        """
+        Announce opponent's move.
+        
+        Args:
+            move_san: Opponent's move in SAN notation
+            opponent_color: "white" or "black"
+        """
         announcement = self.announcer.announce_opponent_move(move_san, opponent_color)
         self.tts.speak(announcement)
         self.last_announcement = announcement

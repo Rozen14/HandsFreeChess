@@ -2,7 +2,7 @@ from voice_input import move_parser as mp
 
 # SAN testing
 def test_basic_move():
-    assert mp.parse_move("knight to e5") == "Ne5"
+    assert mp.parse_move("b5") == "b5"
 
 
 def test_capture():

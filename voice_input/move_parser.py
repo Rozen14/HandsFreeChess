@@ -82,6 +82,7 @@ def extract_square_disambiguation(text: str) -> str | None:
 
 # ---------------------------------------------------------
 # Main move parser combining all logic
+# TODO: FIX... b5 should parse as b5, NOT Bb5
 # ---------------------------------------------------------
 def parse_move(text) -> None | str:   
     raw_text = text.strip().lower()

@@ -173,7 +173,6 @@ class SpeechRecognizer:
             return None
         
     def listen_loop(self, callback: Optional[Callable[[str], None]] = None):
-        # TODO: Remove print when implemented
         """
         Continuously listen for speech and process it.
         
@@ -187,12 +186,10 @@ class SpeechRecognizer:
             if not text:
                 continue
             
-            if callback(text):
+            if callback:
                 # If callback returns False, stop the loop
                 if callback(text) is False:
                     break
-            else:
-                print(f"You said: {text}")
                     
     def cleanup(self):
         """Clean up temporary files."""

@@ -5,6 +5,8 @@ from controller import voice_game_controller as vgc
 import os
 # TODO: Remove redundant tts.speak...
 # TODO: Remove prints for proper logging...
+# TODO: Migrate main to app/ when implementing minimal UI...
+# TODO: Maybe move setup functions into utils/ (?)
 # TODO: Check callback function...
 
 def setup_ffmpeg():
@@ -70,7 +72,7 @@ def main():
     
     try:
         # TODO: Add game and tts as passable inputs into function
-        callback = handle_speech(game, tts)
+        callback = controller.handle_speech
         
         recognizer.listen_loop(callback=callback)
         

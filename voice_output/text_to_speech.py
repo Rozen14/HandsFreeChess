@@ -1,4 +1,5 @@
 import pyttsx3
+# TODO: Change model...
 
 class TextToSpeech:
     def __init__(self, rate=180, volume=1.0):
