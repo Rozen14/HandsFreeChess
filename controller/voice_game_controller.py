@@ -4,7 +4,6 @@ from voice_output import game_announcer as ga
 
 # TODO: Remove prints for proper logging...
 # TODO: Check if callback function (handle_speech) can be reduced (unscalable)...
-# TODO: Fix flow handle_speech calls handle_clarification and so forth...
 
 class GameController:
     """
@@ -25,6 +24,8 @@ class GameController:
         self.waiting_for_clarification = False
         self.pending_move = None
         self.last_announcement = ""
+        # TODO: Add as param or refactor based on who moves first...
+        self.waiting_for_opponent = False
     
     def handle_speech(self, text: str) -> bool:
         """
@@ -79,6 +80,7 @@ class GameController:
     
     def _handle_move(self, text: str) -> bool:
         """"""
+        # TODO: add self.wait_and_announce_opponent_move()
         parsed_move = mp.parse_move(text)
         
         if not parsed_move:
@@ -242,4 +244,74 @@ class GameController:
         announcement = self.announcer.announce_opponent_move(move_san, opponent_color)
         self.tts.speak(announcement)
         self.last_announcement = announcement
+    
+    # TODO: one of these two functions needs a refactor
+    def wait_and_announce_opponent_move(self) -> bool:
+        """
+        Wait for opponent's move, then announce it.
         
+        Returns:
+            False if game ended, True to continue
+        """
+        self.waiting_for_opponent = True
+        self.tts.speak("Waiting for opponent.")
+        
+        # Store current board state
+        initial_fen = self.game.get_fen()
+        
+        # Poll for opponent move (simple version - checks every 2 seconds)
+        import time
+        max_wait = 300  # 5 minutes timeout
+        elapsed = 0
+        
+        while elapsed < max_wait and self.waiting_for_opponent:
+            time.sleep(2)
+            elapsed += 2
+            
+            # Fetch current state (stub for now - implement platform-specific later)
+            current_fen = self.game.fetch_current_state()
+            
+            if current_fen and current_fen != initial_fen:
+                # Board changed - opponent made a move!
+                opponent_move = self.game.get_last_move_san()
+                # TODO: change color assignment logic
+                opponent_color = "black" if self.game.player_color == chess.WHITE else "white"
+                
+                if opponent_move:
+                    self.announce_opponent_move(opponent_move, opponent_color)
+                    
+                    # Check for check on our king
+                    if self.game.board.is_check():
+                        self.tts.speak("You are in check!")
+                    
+                    # Check if game is over
+                    if self.game.is_game_over():
+                        result = self.game.get_result()
+                        result_text = self.announcer.announce_game_over(result)
+                        self.tts.speak(result_text)
+                        self.waiting_for_opponent = False
+                        return False
+                
+                self.waiting_for_opponent = False
+                return True
+        
+        # Timeout
+        if self.waiting_for_opponent:
+            self.tts.speak("Timed out waiting for opponent.")
+            self.waiting_for_opponent = False
+        
+        return True
+    
+    def simulate_opponent_move(self):
+        """Test mode: manually input opponent's move."""
+        print("\n=== Simulating opponent move ===")
+        opponent_move = input("Enter opponent's move in SAN (e.g., 'e5', 'Nf6'): ").strip()
+        
+        if self.game.play_opponent_move(opponent_move):
+            # TODO: change color assignment logic
+            opponent_color = "black" if self.game.player_color == chess.WHITE else "white"
+            self.announce_opponent_move(opponent_move, opponent_color)
+            return True
+        else:
+            print("Invalid move!")
+            return False

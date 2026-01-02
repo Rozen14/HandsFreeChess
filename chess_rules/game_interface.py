@@ -251,10 +251,30 @@ class GameState:
             "balance": self.material_balance()  
         }
         
-    def play_opponent_move(self, move):
+    def get_last_move_san(self) -> str | None:
+        """"""
+        if self.board.move_stack:
+            last_move = self.board.peek()
+            # Temporarily pop to get proper SAN
+            temp_move = self.board.pop()
+            san = self.board.san(temp_move)
+            self.board.push(temp_move)
+            return san
+        return None
+    
+    def play_opponent_move(self, move_san: str) -> None:
         # TODO: implement
-        self.board.push(move)
-        pass        
+        try:
+            move_obj = self.board.parse_san(move_san)
+            self.board.push(move_obj)
+            return True
+        except:
+            return False
+            
+    def fetch_current_state(self) -> str:
+        # TODO: Implement platform-specific API calls.
+        # Stub - in production this would call Chess.com/Lichess API
+        return self.get_fen()
         
 # ---------------------------------------------------------
 # CHESS.COM ADAPTER (stub until API access is granted)
