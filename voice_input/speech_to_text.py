@@ -148,7 +148,7 @@ class SpeechRecognizer:
                 print("Listening...")
                 audio = self.recognizer.listen(
                     source,
-                    timeout=5,               # wait for speech
+                    timeout=None,               # wait for speech
                     phrase_time_limit=self.phrase_time_limit      # max length of command
                 )
 

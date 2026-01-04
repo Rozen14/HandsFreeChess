@@ -4,6 +4,7 @@ from voice_output.text_to_speech import TextToSpeech
 from controller import voice_game_controller as vgc
 from utils.environment import setup_ffmpeg
 from utils.audio_setup import setup_microphone 
+from app.board_view import SimpleBoardVisualizer
 
 # TODO: Remove prints for proper logging...
 # TODO: Migrate main to app/ when implementing minimal UI...
@@ -29,8 +30,11 @@ def main():
     # If user moves second, wait until opponent makes move, etc.
     # (keep in mind rematches etc.)
     
+    # Initialize visualizer
+    board_view = SimpleBoardVisualizer()
+    
     # Initialize controller
-    controller = vgc.GameController(game, tts)
+    controller = vgc.GameController(game, tts, board_view=board_view)
     
     print("\nVoice Chess Interface Started")
     print("Say 'stop' to exit\n") # TODO: Implement exit

@@ -1,6 +1,7 @@
 from voice_input import intent_classifier as ic
 from voice_input import move_parser as mp
 from voice_output import game_announcer as ga
+from app.board_view import SimpleBoardVisualizer as view
 
 # TODO: Remove prints for proper logging...
 # TODO: Check if callback function (handle_speech) can be reduced (unscalable)...
@@ -13,7 +14,7 @@ class GameController:
     and user interactions. It manages disambiguation, game actions, and announcements.
     """
     
-    def __init__(self, game, tts):
+    def __init__(self, game, tts, board_view = None, simulating_opponent: bool = True):
         
         self.game = game
         self.tts = tts
@@ -26,9 +27,10 @@ class GameController:
         self.last_announcement = ""
         # TODO: Add as param or refactor based on who moves first...
         self.waiting_for_opponent = False
+        self.board_view = board_view
         
         # Additional parameter that allows for testing when True
-        self.simulating_opponent = True
+        self.simulating_opponent = simulating_opponent
     
     def handle_speech(self, text: str) -> bool:
         """
@@ -102,6 +104,10 @@ class GameController:
             # TODO: if user wants to listen to this announcement again
             # and flow continues, how does he ask for repetition?
             
+            # Visualize board
+            if self.simulating_opponent:
+                self.board_view.render(self.game)
+            
             # Check for check
             if self.game.board.is_check():
                 self.tts.speak("Check!")
@@ -115,7 +121,7 @@ class GameController:
                 self.end_game(result, reason)
                 return False
 
-            # Switch to opponent's turn...
+            # After successful move, handle opponent's turn
             return self.handle_opponent_turn()
             
         elif error == "ambiguous":
@@ -249,6 +255,13 @@ class GameController:
     def end_game(self, result: str, reason):
         announcement = self.announcer.announce_game_over(result, reason)
         self.tts.speak(announcement)
+        self.last_announcement = announcement
+        
+        # TODO: Add Elo change announcement if available
+        # if elo_change:
+        #     elo_announcement = self.announcer.announce_elo_change(new_elo, change)
+        #     self.tts.speak(elo_announcement)
+        #     self.last_announcement = announcement
     
     def announce_opponent_move(self, move_san: str, opponent_color: str) -> None:
         """
@@ -291,6 +304,7 @@ class GameController:
         Returns:
             False if game ended, True otherwise
         """
+        # TODO: Flow takes too long between announcing player's move and saying this...
         self.tts.speak("Waiting for opponent.")
         
         # 1. Get opponent move
@@ -307,13 +321,17 @@ class GameController:
             print("\n=== Simulating opponent move ===")
             opponent_move = input("Enter opponent's move in SAN (e.g., 'e5', 'Nf6'): ").strip()
             
-        # 2. Apply opponent move
+        # 2.1 Apply opponent move
         success = self.game.play_opponent_move(opponent_move)
         
         if not success:
             # Should never get here in live games or games vs an engine...
             self.tts.speak("Opponent played an invalid move")
             return True
+        
+        # 2.2 Visualize opponent move
+        if self.simulating_opponent:
+            self.board_view.render(self.game)
         
         # 3. Announce opponent move
         opponent_color = "black" if self.game.player_color == "white" else "white"
