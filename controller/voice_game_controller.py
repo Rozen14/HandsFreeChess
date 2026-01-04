@@ -26,6 +26,9 @@ class GameController:
         self.last_announcement = ""
         # TODO: Add as param or refactor based on who moves first...
         self.waiting_for_opponent = False
+        
+        # Additional parameter that allows for testing when True
+        self.simulating_opponent = True
     
     def handle_speech(self, text: str) -> bool:
         """
@@ -113,8 +116,7 @@ class GameController:
                 return False
 
             # Switch to opponent's turn...
-            # TODO: Implement...
-            self.handle_opponent_turn()
+            return self.handle_opponent_turn()
             
         elif error == "ambiguous":
             # Enter disambiguation mode
@@ -158,7 +160,9 @@ class GameController:
         return True
     
     def _handle_clarification(self, text: str) -> bool:
-        """ Handle clarification responses (disambiguation or castling side)."""
+        """ 
+        Handle clarification responses (disambiguation or castling side).
+        """
         
         # Castling side clarification
         if self.pending_move == "castle":
@@ -258,71 +262,76 @@ class GameController:
         self.tts.speak(announcement)
         self.last_announcement = announcement
     
-    # TODO: one of these two functions needs a refactor
-    def wait_and_announce_opponent_move(self) -> bool:
+    def wait_for_opponent_move(self, timeout: int = 360) -> str | None:
         """
-        Wait for opponent's move, then announce it.
+        Blocks until opponent makes a move or timeout occurs.
         
         Returns:
-            False if game ended, True to continue
+            SAN move string, or None on timeout.
         """
-        self.waiting_for_opponent = True
-        self.tts.speak("Waiting for opponent.")
-        
-        # Store current board state
         initial_fen = self.game.get_fen()
-        
-        # Poll for opponent move (simple version - checks every 2 seconds)
-        import time
-        max_wait = 300  # 5 minutes timeout
         elapsed = 0
         
-        while elapsed < max_wait and self.waiting_for_opponent:
+        import time
+        while elapsed < timeout:
             time.sleep(2)
             elapsed += 2
             
-            # Fetch current state (stub for now - implement platform-specific later)
             current_fen = self.game.fetch_current_state()
-            
             if current_fen and current_fen != initial_fen:
-                # Board changed - opponent made a move!
-                opponent_move = self.game.get_last_move_san()                
-                opponent_color = "black" if self.game.player_color == "white" else "white"
-                
-                if opponent_move:
-                    self.announce_opponent_move(opponent_move, opponent_color)
-                    
-                    # Check for check on our king
-                    if self.game.board.is_check():
-                        self.tts.speak("You are in check!")
-                    
-                    # Check if game is over
-                    if self.game.is_game_over():
-                        result = self.game.get_result()
-                        result_text = self.announcer.announce_game_over(result)
-                        self.tts.speak(result_text)
-                        self.waiting_for_opponent = False
-                        return False
-                
-                self.waiting_for_opponent = False
-                return True
+                return self.game.get_last_move_san()
         
-        # Timeout
-        if self.waiting_for_opponent:
-            self.tts.speak("Timed out waiting for opponent.")
-            self.waiting_for_opponent = False
-        
-        return True
+        # TODO: Once integration has been completed, this can be refactored...
+        return None
     
-    def handle_opponent_turn(self):
-        """Test mode: manually input opponent's move."""
-        print("\n=== Simulating opponent move ===")
-        opponent_move = input("Enter opponent's move in SAN (e.g., 'e5', 'Nf6'): ").strip()
+    def handle_opponent_turn(self) -> bool:
+        """
+        Handles opponent move lifecycle.
         
-        if self.game.play_opponent_move(opponent_move):
-            opponent_color = "black" if self.game.player_color == "white" else "white"
-            self.announce_opponent_move(opponent_move, opponent_color)
+        Returns:
+            False if game ended, True otherwise
+        """
+        self.tts.speak("Waiting for opponent.")
+        
+        # 1. Get opponent move
+        if not self.simulating_opponent:
+            # TODO: Set timeout based on time constraints for current game...
+            # ie. blitz = 3/5 mins, rapid = 15/30/etc., bullet = 30sec etc.
+            opponent_move = self.wait_for_opponent_move()
+
+            if opponent_move is None:
+                self.tts.speak("Timed out waiting for opponent.")
+                return True
+            
+        else:            
+            print("\n=== Simulating opponent move ===")
+            opponent_move = input("Enter opponent's move in SAN (e.g., 'e5', 'Nf6'): ").strip()
+            
+        # 2. Apply opponent move
+        success = self.game.play_opponent_move(opponent_move)
+        
+        if not success:
+            # Should never get here in live games or games vs an engine...
+            self.tts.speak("Opponent played an invalid move")
             return True
-        else:
-            print("Invalid move!")
-            return False
+        
+        # 3. Announce opponent move
+        opponent_color = "black" if self.game.player_color == "white" else "white"
+        self.announce_opponent_move(opponent_move, opponent_color)
+        
+        # 4. Check check
+        if self.game.board.is_check():
+            self.tts.speak("Check!")
+            return True
+        
+        # 5. Check game over
+        if self.game.is_game_over():
+                outcome = self.game.board.outcome()
+                result = outcome.result()
+                # reason = outcome.termination
+                reason = ... # TODO: Add fallback for resignation, timeout, leave others...          
+                self.end_game(result, reason)
+                return False
+        
+        # 6. Back to player's turn
+        return True

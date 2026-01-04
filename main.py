@@ -21,7 +21,7 @@ def main():
     )
     
     # Initialize text to speech
-    tts = TextToSpeech(rate=180, volume=1.0)
+    tts = TextToSpeech()
     
     # Initialize game
     game = gi.GameState()

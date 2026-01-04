@@ -97,11 +97,11 @@ class SpeechRecognizer:
         device: str = "cpu",
         compute_type: str = "int8",
         phrase_time_limit: float = 4,
-        vad_min_silence: int = 250
+        # vad_min_silence: int = 250
     ):
         self.mic_index = mic_index
         self.phrase_time_limit = phrase_time_limit
-        self.vad_min_silence = vad_min_silence
+        # self.vad_min_silence = vad_min_silence
         
         # Initialize microphone
         try: 
@@ -142,6 +142,7 @@ class SpeechRecognizer:
         Returns:
             Transcribed text or None if no speech detected
         """
+        # TODO: Adjust listening time or change to other method...
         try:
             with self.mic as source:
                 print("Listening...")
@@ -159,7 +160,7 @@ class SpeechRecognizer:
                 "temp.wav",
                 vad_filter=True,
                 vad_parameters={
-                    "min_silence_duration_ms": 300
+                    # "min_silence_duration_ms": 300
                 },
                 beam_size=1,
                 best_of=1

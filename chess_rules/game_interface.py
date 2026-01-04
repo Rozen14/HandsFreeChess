@@ -266,7 +266,7 @@ class GameState:
         return None
     
     def play_opponent_move(self, move_san: str) -> None:
-        # TODO: implement
+        """"""
         try:
             move_obj = self.board.parse_san(move_san)
             self.board.push(move_obj)

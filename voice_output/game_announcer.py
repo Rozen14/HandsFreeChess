@@ -22,6 +22,7 @@ class MoveAnnouncer:
         }    
     
     def announce_move(self, move: str) -> str:
+        """"""
         # TODO: implement fallback in case move comes in uci format
         move = move.strip()
         
@@ -71,7 +72,9 @@ class MoveAnnouncer:
             return f"{piece.capitalize()} to {dest_square}"
     
     def announce_opponent_move(self, move_san: str, opponent_color: str) -> str:
-        # TODO: implement
+        
+        # TODO: Maybe add variation to how the announcer says these(?)
+        # Avoid being repetitive(?)
         color_name = opponent_color.capitalize()
         move_desc = self.announce_move(move_san)
         return f"{color_name} played {move_desc.lower()}"
