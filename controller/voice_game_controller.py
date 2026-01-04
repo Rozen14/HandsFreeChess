@@ -96,6 +96,8 @@ class GameController:
             announcement = self.announcer.announce_move(parsed_move)
             self.tts.speak(announcement)
             self.last_announcement = announcement
+            # TODO: if user wants to listen to this announcement again
+            # and flow continues, how does he ask for repetition?
             
             # Check for check
             if self.game.board.is_check():
@@ -103,12 +105,17 @@ class GameController:
                 
             # Check for game over
             if self.game.is_game_over():
-                result = self.game.get_result()
-                # TODO: include reason as 2nd param
-                result_text = self.announcer.announce_game_over(result, ...)
-                self.tts.speak(result_text)
+                outcome = self.game.board.outcome()
+                result = outcome.result()
+                # reason = outcome.termination
+                reason = ... # TODO: Add fallback for resignation, timeout, leave others...          
+                self.end_game(result, reason)
                 return False
-        
+
+            # Switch to opponent's turn...
+            # TODO: Implement...
+            self.handle_opponent_turn()
+            
         elif error == "ambiguous":
             # Enter disambiguation mode
             prompt = self.game.get_disambiguation_prompt(parsed_move)
@@ -231,7 +238,13 @@ class GameController:
     
     def _handle_positions(self) -> bool:
         """"""
+        # TODO: Utilize self.game.board.piece_map()
+        piece_map = self.game.board.piece_map()
         pass
+    
+    def end_game(self, result: str, reason):
+        announcement = self.announcer.announce_game_over(result, reason)
+        self.tts.speak(announcement)
     
     def announce_opponent_move(self, move_san: str, opponent_color: str) -> None:
         """
@@ -273,9 +286,8 @@ class GameController:
             
             if current_fen and current_fen != initial_fen:
                 # Board changed - opponent made a move!
-                opponent_move = self.game.get_last_move_san()
-                # TODO: change color assignment logic
-                opponent_color = "black" if self.game.player_color == chess.WHITE else "white"
+                opponent_move = self.game.get_last_move_san()                
+                opponent_color = "black" if self.game.player_color == "white" else "white"
                 
                 if opponent_move:
                     self.announce_opponent_move(opponent_move, opponent_color)
@@ -302,14 +314,13 @@ class GameController:
         
         return True
     
-    def simulate_opponent_move(self):
+    def handle_opponent_turn(self):
         """Test mode: manually input opponent's move."""
         print("\n=== Simulating opponent move ===")
         opponent_move = input("Enter opponent's move in SAN (e.g., 'e5', 'Nf6'): ").strip()
         
         if self.game.play_opponent_move(opponent_move):
-            # TODO: change color assignment logic
-            opponent_color = "black" if self.game.player_color == chess.WHITE else "white"
+            opponent_color = "black" if self.game.player_color == "white" else "white"
             self.announce_opponent_move(opponent_move, opponent_color)
             return True
         else:

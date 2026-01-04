@@ -11,7 +11,7 @@ class GameState:
     and provides utilities for querying game state (material count, game over, etc.).
     """
     
-    def __init__(self, variant: str = "standard", player_color: chess.Color = chess.WHITE) -> None:
+    def __init__(self, variant: str = "standard", player_color: str = "white") -> None:
         """
         Initialize a new game state.
         
@@ -51,50 +51,53 @@ class GameState:
         Returns:
             - "O-O" for kingside castling
             - "O-O-O" for queenside castling  
-            - ("ambiguous", ["O-O", "O-O-O"]) if both sides available
+            - "ambiguous" if both sides available
             - None if castling is not legal
-        """
+        """        
+        # Check what castling is available for current player
+        if self.player_color == chess.WHITE:
+            can_kingside = self.board.has_kingside_castling_rights(chess.WHITE)
+            can_queenside = self.board.has_queenside_castling_rights(chess.WHITE)
+        else:
+            can_kingside = self.board.has_kingside_castling_rights(chess.BLACK)
+            can_queenside = self.board.has_queenside_castling_rights(chess.BLACK)
+            
+        # No castling available at all
+        if not can_kingside and not can_queenside:
+            return None
+        
         text_lower = text.lower()
         
         # These work regardless of color
         if any(phrase in text_lower for phrase in ["queenside", "long", "o-o-o", "0-0-0"]):
-            return "O-O-O"
+            return "O-O-O" if can_queenside else None
         
         if any(phrase in text_lower for phrase in ["kingside", "short", "o-o", "0-0"]):
-            return "O-O"
+            return "O-O" if can_kingside else None
         
         # Directional indicators
         if "left" in text_lower:
-            # From white's perspective: left = queenside
-            # From black's perspective: left = kingside
+            # White's left = queenside, Black's left = kingside
             if self.player_color == chess.WHITE:
-                return "O-O-O"  # Queenside
+                return "O-O-O" if can_queenside else None
             else:
-                return "O-O"    # Kingside
+                return "O-O" if can_kingside else None
         
         if "right" in text_lower:
-            # From white's perspective: right = kingside
-            # From black's perspective: right = queenside
+            #  White's right = kingside, Black's right = queenside
             if self.player_color == chess.WHITE:
-                return "O-O"    # Kingside
+                return "O-O" if can_kingside else None
             else:
-                return "O-O-O"  # Queenside
+                return "O-O-O" if can_queenside else None
             
         # Generic "castle" - check what's available
         if "castle" in text_lower or "castling" in text_lower:
-            kingside_legal = self.validator.is_legal("O-O")
-            queenside_legal = self.validator.is_legal("O-O-O")
-            
-            if kingside_legal and queenside_legal:
-                # Both available - need clarification
+            if can_kingside and can_queenside:
                 return "ambiguous"
-            elif kingside_legal:
+            elif can_kingside:
                 return "O-O"
-            elif queenside_legal:
+            elif can_queenside:
                 return "O-O-O"
-            else:
-                # No castling available
-                return None
             
         return None
     
@@ -288,7 +291,7 @@ class ChessDotCom(GameState):
     Currently a stub pending API access approval.
     """
     
-    def __init__(self, board_region, variant, player_color) -> None:
+    def __init__(self, board_region, variant: str = "standard", player_color: str = "white") -> None:
         """
         Initialize Chess.com game state.
         
@@ -322,7 +325,7 @@ class LiChess(GameState):
     Extends GameState to integrate with Lichess's API using token-based auth.
     """
     
-    def __init__(self, token, variant: str = "standard", player_color: chess.Color = chess.WHITE) -> None:
+    def __init__(self, token, variant: str = "standard", player_color: str = "white") -> None:
         """
         Initialize Lichess game state.
         

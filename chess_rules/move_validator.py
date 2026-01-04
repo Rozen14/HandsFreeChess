@@ -1,6 +1,7 @@
 import chess
 from typing import Optional, List, Tuple
 # TODO: (Optional) add chess 960 and variants
+# TODO: (V1.0) Refactor... Most of the logic can go through python-chess library...
 
 class MoveValidator:
     """
