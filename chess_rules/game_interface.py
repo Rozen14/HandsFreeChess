@@ -265,11 +265,29 @@ class GameState:
             return san
         return None
     
-    def play_opponent_move(self, move_san: str) -> None:
-        """"""
+    def play_opponent_move(self, move: str) -> None:
+        """
+        
+        """
+        # SAN
         try:
-            move_obj = self.board.parse_san(move_san)
+            move_obj = self.board.parse_san(move)
             self.board.push(move_obj)
+            return True
+        except:
+            pass
+        
+        # UCI
+        try: 
+            move_obj = self.board.parse_uci(move)
+            self.board.push(move_obj)
+            return True
+        except:
+            pass
+        
+        # chess.Move
+        try:
+            self.board.push(move)
             return True
         except:
             return False

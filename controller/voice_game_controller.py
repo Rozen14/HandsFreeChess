@@ -1,7 +1,7 @@
 from voice_input import intent_classifier as ic
 from voice_input import move_parser as mp
 from voice_output import game_announcer as ga
-from app.board_view import SimpleBoardVisualizer as view
+import threading
 
 # TODO: Remove prints for proper logging...
 # TODO: Check if callback function (handle_speech) can be reduced (unscalable)...
@@ -14,7 +14,7 @@ class GameController:
     and user interactions. It manages disambiguation, game actions, and announcements.
     """
     
-    def __init__(self, game, tts, board_view = None, simulating_opponent: bool = True):
+    def __init__(self, game, tts, board_view = None, opponent_type = "human"):
         
         self.game = game
         self.tts = tts
@@ -29,8 +29,8 @@ class GameController:
         self.waiting_for_opponent = False
         self.board_view = board_view
         
-        # Additional parameter that allows for testing when True
-        self.simulating_opponent = simulating_opponent
+        # Additional parameter that allows for testing when equals human or stockfish...
+        self.opponent_type = opponent_type # Literal["human", "stockfish", "online"]
     
     def handle_speech(self, text: str) -> bool:
         """
@@ -84,8 +84,7 @@ class GameController:
             return True
     
     def _handle_move(self, text: str) -> bool:
-        """"""
-        # TODO: add self.wait_and_announce_opponent_move()
+        """"""        
         parsed_move = mp.parse_move(text)
         
         if not parsed_move:
@@ -105,8 +104,12 @@ class GameController:
             # and flow continues, how does he ask for repetition?
             
             # Visualize board
-            if self.simulating_opponent:
-                self.board_view.render(self.game)
+            if self.opponent_type != "online":
+                threading.Thread(
+                    target=self.board_view.run,
+                    args=(self.game,),
+                    daemon=True
+                ).start()
             
             # Check for check
             if self.game.board.is_check():
@@ -247,8 +250,7 @@ class GameController:
         return True
     
     def _handle_positions(self) -> bool:
-        """"""
-        # TODO: Utilize self.game.board.piece_map()
+        """"""        
         piece_map = self.game.board.piece_map()
         pass
     
@@ -308,7 +310,7 @@ class GameController:
         self.tts.speak("Waiting for opponent.")
         
         # 1. Get opponent move
-        if not self.simulating_opponent:
+        if self.opponent_type != "human":
             # TODO: Set timeout based on time constraints for current game...
             # ie. blitz = 3/5 mins, rapid = 15/30/etc., bullet = 30sec etc.
             opponent_move = self.wait_for_opponent_move()
@@ -317,10 +319,10 @@ class GameController:
                 self.tts.speak("Timed out waiting for opponent.")
                 return True
             
-        else:            
+        else:           
             print("\n=== Simulating opponent move ===")
             opponent_move = input("Enter opponent's move in SAN (e.g., 'e5', 'Nf6'): ").strip()
-            
+
         # 2.1 Apply opponent move
         success = self.game.play_opponent_move(opponent_move)
         
@@ -330,11 +332,19 @@ class GameController:
             return True
         
         # 2.2 Visualize opponent move
-        if self.simulating_opponent:
-            self.board_view.render(self.game)
+        if self.opponent_type != "online":
+                threading.Thread(
+                    target=self.board_view.run,
+                    args=(self.game,),
+                    daemon=True
+                ).start()
         
         # 3. Announce opponent move
         opponent_color = "black" if self.game.player_color == "white" else "white"
+        
+        if not isinstance(opponent_move, str):
+            opponent_move = self.game.board.san(opponent_move)
+            
         self.announce_opponent_move(opponent_move, opponent_color)
         
         # 4. Check check

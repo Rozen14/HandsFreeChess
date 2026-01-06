@@ -12,3 +12,7 @@ venv/
 
 # Test cache
 .pytest_cache/
+
+# Stockfish for testing
+assets/stockfish/
+*.exe
