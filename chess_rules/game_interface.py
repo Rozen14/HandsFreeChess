@@ -21,7 +21,9 @@ class GameState:
         """
         self.board = chess.Board()
         self.validator = mv.MoveValidator(self.board)
-        self.player_color = player_color
+        
+        # Convert string to chess.Color internally
+        self.player_color = chess.WHITE if player_color.lower() == "white" else chess.BLACK
     
     def update_from_fen(self, fen: str) -> None:
         """
@@ -37,6 +39,7 @@ class GameState:
         self.validator.board = self.board
     
     def parse_castling_intent(self, text: str) -> str | None:
+        # TODO: FIX, also castling in UCI is not "O-O" or "O-O-O"
         """
         Parse user's castling command based on their color and perspective.
         
@@ -49,64 +52,63 @@ class GameState:
             text: User's voice command (e.g., "castle left")
             
         Returns:
-            - "O-O" for kingside castling
-            - "O-O-O" for queenside castling  
-            - "ambiguous" if both sides available
-            - None if castling is not legal
+            UCI move string for castling, "ambiguous", or None
         """        
         # Check what castling is available for current player
         if self.player_color == chess.WHITE:
+            rank = "1"
             can_kingside = self.board.has_kingside_castling_rights(chess.WHITE)
             can_queenside = self.board.has_queenside_castling_rights(chess.WHITE)
         else:
+            rank = "8"
             can_kingside = self.board.has_kingside_castling_rights(chess.BLACK)
             can_queenside = self.board.has_queenside_castling_rights(chess.BLACK)
             
-        # No castling available at all
+        # No castling available
         if not can_kingside and not can_queenside:
             return None
         
         text_lower = text.lower()
         
-        # These work regardless of color
-        if any(phrase in text_lower for phrase in ["queenside", "long", "o-o-o", "0-0-0"]):
-            return "O-O-O" if can_queenside else None
-        
-        if any(phrase in text_lower for phrase in ["kingside", "short", "o-o", "0-0"]):
-            return "O-O" if can_kingside else None
+        # Absolute indicators
+        if any(phrase in text_lower for phrase in ["queenside", "long", "o-o-o", "O-O-O"]):
+            return f"" if can_queenside else None
+        # TODO: Add helper function to calculate uci notation for each castle in respective position (so it supports chess960 eventually)
+        if any(phrase in text_lower for phrase in ["kingside", "short", "o-o", "O-O"]):
+            return f"" if can_kingside else None
         
         # Directional indicators
         if "left" in text_lower:
             # White's left = queenside, Black's left = kingside
             if self.player_color == chess.WHITE:
-                return "O-O-O" if can_queenside else None
+                return f"" if can_queenside else None
             else:
-                return "O-O" if can_kingside else None
+                return f"" if can_kingside else None
         
-        if "right" in text_lower:
+        elif "right" in text_lower:
             #  White's right = kingside, Black's right = queenside
             if self.player_color == chess.WHITE:
-                return "O-O" if can_kingside else None
+                return f"" if can_kingside else None
             else:
-                return "O-O-O" if can_queenside else None
+                return f"" if can_queenside else None
             
         # Generic "castle" - check what's available
-        if "castle" in text_lower or "castling" in text_lower:
+        else:
             if can_kingside and can_queenside:
                 return "ambiguous"
             elif can_kingside:
-                return "O-O"
+                return f""
             elif can_queenside:
-                return "O-O-O"
+                return f""
             
         return None
     
-    def play_move(self, move: str) -> tuple[bool, str]:
+    def play_move(self, move_uci: str) -> tuple[bool, str]:
         """
-        Validate and execute a chess move.
+        Validate and execute a chess move in UCI notation.
         
         Args:
-            move: Move in SAN or UCI notation (e.g., "Nf3", "e2e4", "O-O")
+            move: Move in UCI notation (e.g., "e2e4")
             
         Returns:
             Tuple of (success, status):
@@ -115,55 +117,16 @@ class GameState:
             - (False, "illegal") if move is not legal
             - (False, "execution_failed") if move validation passed but execution failed
         """
-        is_valid, error = self.validator.validate_move(move)
+        is_valid, error = self.validator.validate_move(move_uci)
         
         if not is_valid:
-            return (False, error)
+            return (False, error)                
         
-        move_obj = self.validator.parse_move(move)
-        
-        if move_obj:
-            self.board.push(move_obj)
+        if self.validator.execute_move(move_uci):
             # TODO: Implement logic for actually making move on-site...
             return (True, "move_executed")
         
         return (False, "execution_failed")
-    
-    def handle_ambiguous_move(self, move: str, from_square: str) -> tuple[bool, str]:
-        """
-        Resolve and execute an ambiguous move.
-        
-        Takes an ambiguous move like "Re1" and a clarifying square like "a1",
-        resolves it to "Rae1", then executes it.
-        
-        Args:
-            move: Original ambiguous move (e.g., "Re1")
-            from_square: Source square from user's clarification (e.g., "a1")
-            
-        Returns:
-            Tuple of (success, status):
-            - (True, "move_executed") if successful
-            - (False, "invalid_square") if square doesn't match any legal move
-            - (False, other) if execution failed for other reasons
-        """
-        resolved_move = self.validator.resolve_ambiguous_move(move, from_square)
-        
-        if resolved_move:
-            return self.play_move(resolved_move)
-        
-        return (False, "invalid_square")
-    
-    def get_disambiguation_prompt(self, move: str) -> str:        
-        """
-        Get a clarification prompt for an ambiguous move.
-        
-        Args:
-            move: Ambiguous move string (e.g., "Re1")
-            
-        Returns:
-            Natural language prompt (e.g., "Which rook: a1 or h1?")
-        """
-        return self.validator.get_clarification_prompt(move)
     
     def material_balance(self) -> int:
         """
@@ -253,50 +216,36 @@ class GameState:
             "black": count(chess.BLACK),
             "balance": self.material_balance()  
         }
-        
-    def get_last_move_san(self) -> str | None:
-        """"""
-        if self.board.move_stack:
-            last_move = self.board.peek()
-            # Temporarily pop to get proper SAN
-            temp_move = self.board.pop()
-            san = self.board.san(temp_move)
-            self.board.push(temp_move)
-            return san
-        return None
     
-    def play_opponent_move(self, move: str) -> None:
+    def play_opponent_move(self, move_uci: str) -> bool:
         """
+        Execute opponent's move in UCI notation.
         
+        Args:
+            move: Corresponding move in UCI notation (e.g., "e7e5")
+            
+        Returns:
+            True if successful, False otherwise
         """
-        # SAN
-        try:
-            move_obj = self.board.parse_san(move)
-            self.board.push(move_obj)
-            return True
-        except:
-            pass
-        
-        # UCI
-        try: 
-            move_obj = self.board.parse_uci(move)
-            self.board.push(move_obj)
-            return True
-        except:
-            pass
-        
-        # chess.Move
-        try:
-            self.board.push(move)
-            return True
-        except:
-            return False
+        return self.validator.execute_move(move_uci)
             
     def fetch_current_state(self) -> str:
         # TODO: Implement platform-specific API calls.
         # Stub - in production this would call Chess.com/Lichess API
         return self.get_fen()
-        
+    
+    def get_opponent_color_str(self) -> str:
+        """
+        Get opponent's color as a string.
+        """
+        return "black" if self.player_color == chess.WHITE else "white"
+    
+    def get_player_color_str(self) -> str:
+        """
+        Get player's color as a string.
+        """
+        return "white" if self.player_color == chess.WHITE else "black"
+    
 # ---------------------------------------------------------
 # CHESS.COM ADAPTER (stub until API access is granted)
 # ---------------------------------------------------------

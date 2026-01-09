@@ -2,10 +2,12 @@ import re
 from chess import Termination
 from typing import Optional
 # TODO: Finish...
+# TODO: Refactor to use UCI...
 
 class MoveAnnouncer:
     """
     Converts chess moves and game data into natural language announcements.
+    This class works as the bridge between what happens and what TTS says.
     
     This class works with strings and simple data types, not chess objects.
     All chess logic should remain in chess_rules/ modules.

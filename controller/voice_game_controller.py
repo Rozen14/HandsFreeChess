@@ -1,5 +1,6 @@
 from voice_input import intent_classifier as ic
-from voice_input import move_parser as mp
+from chess_rules import uci_converter as uc
+from chess_rules.move_parse_result import MoveParseResult
 from voice_output import game_announcer as ga
 import threading
 
@@ -20,6 +21,7 @@ class GameController:
         self.tts = tts
         self.announcer = ga.MoveAnnouncer()
         self.intent_classifier = ic.IntentClassifier()
+        self.converter = uc.UCIConverter(self.game.board)
         
         # State management
         self.waiting_for_clarification = False
@@ -55,6 +57,7 @@ class GameController:
         intent_type = self.intent_classifier.predict(text)
         print(f"Intent: {intent_type}")
         
+        # TODO: Remove fallback, adjust intent classifier...
         # Fallback: If intent is None but move_parser can parse it, assume it's a move
         if intent_type is None:
             parsed_move = mp.parse_move(text)
@@ -85,16 +88,25 @@ class GameController:
     
     def _handle_move(self, text: str) -> bool:
         """"""        
-        parsed_move = mp.parse_move(text)
+        parsed = self.converter.to_uci(text)
         
-        if not parsed_move:
-            self.tts.speak("Could not understand move. Please try again")
+        if parsed.result == MoveParseResult.NOT_UNDERSTOOD:
+            self.tts.speak("I didn't catch that. Please repeat.")
             return True
         
-        print(f"Parsed: {parsed_move}")
+        if parsed.result == MoveParseResult.AMBIGUOUS:
+            self.tts.speak("That move is ambiguous. Please be more specific.")
+            return True
+        
+        if parsed.result == MoveParseResult.INVALID:
+            self.tts.speak("That move is not legal.")
+            return True
+        
+        uci = parsed.uci
+        print(f"Parsed: {uci}")
         
         # Validate and execute move
-        success, error = self.game.play_move(parsed_move)
+        success, error = self.game.play_move(uci)
         
         if success: 
             announcement = self.announcer.announce_move(parsed_move)

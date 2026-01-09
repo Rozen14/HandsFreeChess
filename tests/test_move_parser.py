@@ -19,7 +19,7 @@ def test_basic_move_UCI():
 
     
 def test_promotion_UCI():
-    assert mp.parse_move("e7e8q") == "e7e8=Q"
+    assert mp.parse_move("e7e8q") == "e7e8q"
 
 
 if __name__ == "__main__":
