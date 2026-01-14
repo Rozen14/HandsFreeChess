@@ -1,8 +1,10 @@
 import re 
-from chess import Termination
+import chess 
 from typing import Optional
+from chess_rules.move_parse_result import MoveParseResult, ParsedMove
 # TODO: Finish...
 # TODO: Refactor to use UCI...
+# TODO: Maybe add variation to phrases(?)
 
 class MoveAnnouncer:
     """
@@ -15,87 +17,145 @@ class MoveAnnouncer:
     
     def __init__(self):
         self.piece_symbols = {
-            "K": "king",
-            "Q": "queen",
-            "R": "rook",
-            "B": "bishop",
-            "N": "knight",
-            "": "pawn"
-        }    
+            chess.KING: "king",
+            chess.QUEEN: "queen",
+            chess.ROOK: "rook",
+            chess.BISHOP: "bishop",
+            chess.KNIGHT: "knight",
+            chess.PAWN: "pawn"
+        }
     
-    def announce_move(self, move: str) -> str:
-        """"""
-        # TODO: implement fallback in case move comes in uci format
-        move = move.strip()
+    def announce_move(self, move_uci: str, board: chess.Board) -> str:
+        """
+        Announce a move in natural language.
         
-        # Remove check/checkmate indicators for cleaner announcement
-        move = move.replace('+', '').replace('#', '')
+        Args:
+            move_uci: Move in UCI notation (e.g., "e2e4", "e1g1")
+            board: Board state BEFORE the move (to check piece types)
+            
+        Returns:
+            Natural language description
+        """
+        try:
+            move = chess.Move.from_uci(move_uci)
+        except:
+            return ParsedMove(MoveParseResult.INVALID)
         
-        # Castling
-        if move == "O-O":
-            return ""
-        if move == "O-O-O":
-            return ""
+        from_square = move.from_square
+        to_square = move.to_square
         
-        # Check for promotion (e.g., "e8=Q")
-        promo_match = re.search(r'=([QRBN])', move)
-        promotion = None
-        if promo_match:
-            promotion = self.piece_symbols[promo_match.group(1)]
-            move = move[:promo_match.start()] # Remove promotion part
+        # Get the piece that's moving
+        piece = board.piece_at(from_square)
+        if not piece:
+            return ParsedMove(MoveParseResult.INVALID)
+        
+        piece_name = self.piece_symbols[piece.piece_type]
+        dest = chess.square_name(to_square)
+        
+        # Check for castling
+        if piece.piece_type == chess.KING:
+            # King moving 2 squares = castling
+            from_file = chess.square_file(from_square)
+            to_file = chess.square_file(to_square)
+            if abs(from_file - to_file) == 2:
+                return "Castled kingside" if to_file > from_file else "Castled queenside"
         
         # Check for capture
-        is_capture = 'x' in move
-        move = move.replace('x', '')
+        is_capture = board.is_capture(move)
         
-        # Extract piece type (first character if uppercase, else pawn)
-        if move and move[0].isupper():
-            piece = self.piece_symbols.get(move[0], 'piece')
-            move = move[1:] # Remove piece symbol
-        else:
-            piece = 'pawn'
-        
-        # Extract destination square (last 2 characters)
-        square_match = re.search(r'[a-h][1-8]', move)
-        if not square_match:
-            return "Invalid move"
-        
-        dest_square = square_match.group(0)
-        
-        # Build announcement
-        if promotion:
+        # Check for promotion
+        if move.promotion:
+            promo_name = self.piece_symbols[move.promotion]
             if is_capture:
-                return f"Pawn takes {dest_square} and promotes to {promotion}"
+                return f"Pawn takes {dest} and promotes to {promo_name}"
             else:
-                return f"Pawn to {dest_square} and promotes to {promotion}"
-        elif is_capture:
-            return f"{piece.capitalize()} takes {dest_square}"
-        else:
-            return f"{piece.capitalize()} to {dest_square}"
-    
-    def announce_opponent_move(self, move_san: str, opponent_color: str) -> str:
+                return f"Pawn to {dest} and promotes to {promo_name}"
         
-        # TODO: Maybe add variation to how the announcer says these(?)
-        # Avoid being repetitive(?)
+        # Regular move or capture
+        if is_capture:
+            return f"{piece_name.capitalize()} takes {dest}"
+        else:
+            return f"{piece_name.capitalize()} to {dest}"
+    
+    
+    def announce_opponent_move(self, move_uci: str, board: chess.Board, opponent_color: str) -> str:
+        """
+        Announce opponent's move with color prefix.
+        
+        Args:
+            move_uci: Move in UCI notation
+            board: Board state BEFORE the move
+            opponent_color: "white" or "black"
+            
+        Returns:
+            Announcement with color
+        """
         color_name = opponent_color.capitalize()
-        move_desc = self.announce_move(move_san)
+        move_desc = self.announce_move(move_uci, board)
         return f"{color_name} played {move_desc.lower()}"
     
-    def announce_material_count(self, white_material: dict, black_material: dict, balance: int) -> str:
+    def announce_material_count(self, material_summary: dict) -> str:
+        """
+        Announce material count given summary from game_interface.
         
+        Args:
+            material_summary: Dict with keys "white", "black", "balance"
+                             from GameState.material_summary()
+            
+        Returns:
+            Material count description
+        """
+        balance = material_summary["balance"]
+        white = material_summary["white"]
+        black = material_summary["black"]
+        
+        # Calculate total points
+        white_total = (white["pawns"] * 1 + white["knights"] * 3 + 
+                      white["bishops"] * 3 + white["rooks"] * 5 + 
+                      white["queens"] * 9)
+        black_total = (black["pawns"] * 1 + black["knights"] * 3 + 
+                      black["bishops"] * 3 + black["rooks"] * 5 + 
+                      black["queens"] * 9)
+        
+        # Build base announcement
         if balance > 0:
-            s = f"White is up by {...}"
+            base = f"White is up by {balance} points. "
         elif balance < 0:
-            s = f"Black is up by {...}"
+            base = f"Black is up by {abs(balance)} points. "
         else:
-            s = f"Material is equal. Both sides have {...} points."
+            base = "Material is equal. "
+                                            
+        base += f"White has {white_total} points, Black has {black_total} points."
         
-        # TODO: Add descriptive data of important pieces each side has
-        # ie. black has 2 rooks and a bishop, pawn has a queen, down 2 pawns...
-        s += f"{...}"
-        return s
+        # Add notable pieces description
+        details = []
+        
+        # White's major pieces
+        white_pieces = []
+        if white["queens"] > 0:
+            white_pieces.append(f"{white['queens']} queen{'s' if white['queens'] > 1 else ''}")
+        if white["rooks"] > 0:
+            white_pieces.append(f"{white['rooks']} rook{'s' if white['rooks'] > 1 else ''}")
+        
+        if white_pieces:
+            details.append(f"White has {', '.join(white_pieces)}")
+        
+        #  Black's major pieces
+        black_pieces = []
+        if black["queens"] > 0:
+            black_pieces.append(f"{black['queens']} queen{'s' if black['queens'] > 1 else ''}")
+        if black["rooks"] > 0:
+            black_pieces.append(f"{black['rooks']} rook{'s' if black['rooks'] > 1 else ''}")
+        
+        if black_pieces:
+            details.append(f"Black has {', '.join(black_pieces)}")
+        
+        if details:
+            base += " " + ". ".join(details) + "."
+        
+        return base
     
-    def announce_game_over(self, result: str, termination: Termination | None = None) -> str:
+    def announce_game_over(self, result: str, termination: chess.Termination | None = None) -> str:
         
         # Draw
         if result == "1/2-1/2":
@@ -114,7 +174,7 @@ class MoveAnnouncer:
             return f"Game over. {winner} wins."
         
         # Win reasons 
-        if termination == Termination.CHECKMATE:
+        if termination == chess.Termination.CHECKMATE:
             return f"Checkmate! {winner} wins!"
         
         # TODO: Check for implementation of VARIANT_WIN and VARIANT_LOSS
@@ -128,30 +188,30 @@ class MoveAnnouncer:
         # These usually come from external game state
         return f"Game over. {winner} wins."
     
-    def format_draw_announcement(self, termination: Termination | None = None) -> str:
+    def format_draw_announcement(self, termination: chess.Termination | None = None) -> str:
         
         if termination is None:
             return "Game over. the game is a draw."
         
-        if termination == Termination.STALEMATE:
+        if termination == chess.Termination.STALEMATE:
             return "Stalemate. The game is a draw."
         
-        if termination == Termination.INSUFFICIENT_MATERIAL:
+        if termination == chess.Termination.INSUFFICIENT_MATERIAL:
             return "Draw due to insufficient material."
         
-        if termination == Termination.SEVENTYFIVE_MOVES:
+        if termination == chess.Termination.SEVENTYFIVE_MOVES:
             return "Draw by the seventy-five move rule."
         
-        if termination == Termination.FIFTY_MOVES:
+        if termination == chess.Termination.FIFTY_MOVES:
             return "Draw by the five move rule."
         
-        if termination == Termination.FIVEFOLD_REPETITION:
+        if termination == chess.Termination.FIVEFOLD_REPETITION:
             return "Draw by fivefold repetition."
         
-        if termination == Termination.THREEFOLD_REPETITION:
+        if termination == chess.Termination.THREEFOLD_REPETITION:
             return "Draw by threefold repetivion."                        
         
-        # Fallback for Termination.VARIANT_DRAW
+        # Fallback for chess.Termination.VARIANT_DRAW
         return "Game over. The game is a draw."
         
     def announce_elo_change(self, new_elo: int, change: int) -> str:

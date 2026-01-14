@@ -1,7 +1,6 @@
 import chess
 from typing import Optional, Tuple
 # TODO: (Optional) add chess 960 and variants
-# TODO: Check if is_legal is necessary...
 
 class MoveValidator:
     """

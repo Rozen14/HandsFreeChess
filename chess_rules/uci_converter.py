@@ -34,7 +34,16 @@ class UCIConverter:
             text: Move in any format
             
         Returns:
-            UCI notation or None if invalid (ambiguous moves count as invalid)
+            ParsedMove: (
+                result: MoveParseResult(enum): 
+                    {
+                        OK = auto()
+                        INVALID = auto()
+                        NOT_UNDERSTOOD = auto()
+                        AMBIGUOUS = auto()
+                    }, 
+                uci: str | None = None
+            )
         """
         text = text.strip().lower()
         
@@ -43,9 +52,15 @@ class UCIConverter:
         
         # Check if already UCI and if legal
         if self._is_uci(text):
-            if chess.Move.from_uci(text) in self.board.legal_moves:
+            if self._is_legal_uci(text):
                 return ParsedMove(MoveParseResult.OK, text)
-            return ParsedMove(MoveParseResult.INVALID)
+            else:
+                return ParsedMove(MoveParseResult.INVALID)
+        
+        # If SAN, check if ambiguous
+        san = text
+        if self._is_ambiguous_san(san):
+            return ParsedMove(MoveParseResult.AMBIGUOUS)
         
         # Convert from SAN to UCI
         uci = self._san_to_uci(text)
@@ -55,6 +70,9 @@ class UCIConverter:
         # Parse natural language to SAN, then to UCI
         san = self._parse_natural_language(text)
         if san:
+            if self._is_ambiguous_san(san):
+                return ParsedMove(MoveParseResult.AMBIGUOUS)
+            
             uci = self._san_to_uci(san)
             if uci:
                 return ParsedMove(MoveParseResult.OK, uci)
@@ -64,11 +82,8 @@ class UCIConverter:
         if uci:
             return ParsedMove(MoveParseResult.OK, uci)
         
-        # Detect ambituity explicitly 
-        if self._is_ambiguous(text):
-            return ParsedMove(MoveParseResult.AMBIGUOUS)
-        
-        return ParsedMove(MoveParseResult.OK, uci)
+        # Could not parse
+        return ParsedMove(MoveParseResult.NOT_UNDERSTOOD)
     
     def _is_uci(self, text: str) -> bool:
         """Check if text is valid UCI format."""
@@ -224,3 +239,61 @@ class UCIConverter:
             return match.group(1).upper()
         
         return None
+    
+    def _is_legal_uci(self, uci: str) -> bool:
+        """
+        Check if UCI move is legal
+        """
+        try: 
+            move = chess.Move.from_uci(uci)
+            return move in self.board.legal_moves
+        except:
+            return False
+        
+    def _is_ambiguous_san(self, san: str) -> bool:
+        """
+        Check if a SAN move is ambiguous in the current board position.
+
+        Example:
+        - "Ne5" is ambiguous if two knights can move to e5
+        - "Nge2" is NOT ambiguous (already disambiguated)
+        """
+        try:
+            # Destination square is required
+            match = re.search(r'[a-h][1-8]', san)
+            if not match:
+                return False
+            
+            target_sq = match.group(0)
+            
+            # Piece letter (default pawn)
+            piece_letter = san[0] if san[0].isupper() else ''
+            
+            normalized_target = f"{piece_letter}{target_sq}"
+            
+            matches = 0
+            
+            for move in self.board.legal_moves:
+                try:
+                    move_san = self.board.san(move)
+                    
+                    # Strip check/mate symbols
+                    move_san = move_san.rstrip('+#!?')
+                    
+                    # Normalize disambiguation: Nbd2 -> Nd2, R1e1 -> Re1
+                    move_san = re.sub(
+                        r'^([NBRQK])([a-h1-8])x?', r'\1', move_san
+                    )
+                    
+                    if move_san == normalized_target:
+                        matches += 1
+                        if matches > 1:
+                            return True
+                    
+                except Exception:
+                    continue
+            
+            return False
+        
+        except Exception:
+            return False

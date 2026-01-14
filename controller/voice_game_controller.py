@@ -5,7 +5,6 @@ from voice_output import game_announcer as ga
 import threading
 
 # TODO: Remove prints for proper logging...
-# TODO: Check if callback function (handle_speech) can be reduced (unscalable)...
 
 class GameController:
     """
@@ -24,7 +23,6 @@ class GameController:
         self.converter = uc.UCIConverter(self.game.board)
         
         # State management
-        self.waiting_for_clarification = False
         self.pending_move = None
         self.last_announcement = ""
         # TODO: Add as param or refactor based on who moves first...
@@ -49,21 +47,9 @@ class GameController:
         
         print(f"You said: {text}")
         
-        # Handle clarification mode
-        if self.waiting_for_clarification:
-            return self._handle_clarification(text)
-        
         # Classify intent
         intent_type = self.intent_classifier.predict(text)
-        print(f"Intent: {intent_type}")
-        
-        # TODO: Remove fallback, adjust intent classifier...
-        # Fallback: If intent is None but move_parser can parse it, assume it's a move
-        if intent_type is None:
-            parsed_move = mp.parse_move(text)
-            if parsed_move:
-                print(f"Fallback: Detected as move")
-                return self._handle_move(text)
+        print(f"Intent: {intent_type}")        
         
         # Route to appropriate handler
         if intent_type == "move":
@@ -105,11 +91,14 @@ class GameController:
         uci = parsed.uci
         print(f"Parsed: {uci}")
         
+        # Store board state before move
+        board_before_move = self.game.board.copy()        
+        
         # Validate and execute move
         success, error = self.game.play_move(uci)
         
-        if success: 
-            announcement = self.announcer.announce_move(parsed_move)
+        if success:             
+            announcement = self.announcer.announce_move(uci, board_before_move)
             self.tts.speak(announcement)
             self.last_announcement = announcement
             # TODO: if user wants to listen to this announcement again
@@ -137,32 +126,23 @@ class GameController:
                 return False
 
             # After successful move, handle opponent's turn
-            return self.handle_opponent_turn()
-            
-        elif error == "ambiguous":
-            # Enter disambiguation mode
-            prompt = self.game.get_disambiguation_prompt(parsed_move)
-            self.tts.speak(prompt)
-            self.waiting_for_clarification = True
-            self.pending_move = parsed_move
-        
-        else:
-            self.tts.speak("That move is not legal.")
+            return self.handle_opponent_turn()            
         
         return True
     
     def _handle_castling(self, text: str) -> bool:
-        """"""
+        """
+        
+        """
         castle_result = self.game.parse_castling_intent(text)
         
-        if castle_result is None: 
+        if castle_result.result is None: 
             self.tts.speak("Castling is not legal in this position.")
             return True
         
         # Check if ambiguous (both side available)
-        if castle_result == "ambiguous":
+        if castle_result.result == AMBIGUOUS:
             self.tts.speak("Which side? Kingisde or queenside?")
-            self.waiting_for_clarification = True
             self.pending_move = "castle"
             return True
         
@@ -177,63 +157,6 @@ class GameController:
             self.last_announcement = announcement
         else:
             self.tts.speak("Cannot castle in this position.")
-        
-        return True
-    
-    def _handle_clarification(self, text: str) -> bool:
-        """ 
-        Handle clarification responses (disambiguation or castling side).
-        """
-        
-        # Castling side clarification
-        if self.pending_move == "castle":
-            text_lower = text.lower()
-
-            if any(word in text_lower for word in ["kingside", "short", "king"]):
-                castle_move = "O-O"
-            elif any(word in text_lower for word in ["queenside", "long", "queen"]):
-                castle_move = "O-O-O"
-            else:
-                self.tts.speak("Please say kingside or queenside.")
-                return True
-                
-            success, _ = self.game.play_move(castle_move)
-            
-            if success:
-                side = "queenside" if castle_move == "O-O-O" else "kingside"
-                self.tts.speak(f"Castled {side}")
-            else:
-                self.tts.speak("Cannot castle...")
-            
-            # Exit clarification mode
-            self.waiting_for_clarification = False
-            self.pending_move = None
-            return True 
-        
-        from_square = mp.extract_square_disambiguation(text)
-        
-        # Move disambiguation clarification
-        if not from_square:
-            self.tts.speak("I didn't understand. Please say the square, like 'a1' or 'h8'.")                               
-            return True
-        
-        success, _ = self.game.handle_ambiguous_move(self.pending_move, from_square)
-        
-        if success:
-            self.tts.speak(f"Moved {self.pending_move} from {from_square}")
-            
-            # Exit clarification mode
-            self.waiting_for_clarification = False
-            self.pending_move = None
-            
-            # Check game state
-            if self.game.is_game_over():
-                # TODO: Add reason as 2nd param
-                result_text = self.announcer.announce_game_over(self.game.get_result(), ...)
-                self.tts.speak(result_text)
-                return False
-        else:
-            self.tts.speak("That square doesn't match any legal move. Please try again.")
         
         return True
             

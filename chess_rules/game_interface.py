@@ -1,7 +1,9 @@
 import chess
 import requests
 from chess_rules import move_validator as mv
+from chess_rules.move_parse_result import MoveParseResult, ParsedMove
 # TODO: (Optional) add chess variants ie. chess960 etc.
+# TODO: Refactor moves as to have relevant formatting...
 
 class GameState:
     """
@@ -38,8 +40,7 @@ class GameState:
         # Update validator's board reference
         self.validator.board = self.board
     
-    def parse_castling_intent(self, text: str) -> str | None:
-        # TODO: FIX, also castling in UCI is not "O-O" or "O-O-O"
+    def parse_castling_intent(self, text: str) -> ParsedMove:
         """
         Parse user's castling command based on their color and perspective.
         
@@ -52,56 +53,91 @@ class GameState:
             text: User's voice command (e.g., "castle left")
             
         Returns:
-            UCI move string for castling, "ambiguous", or None
+            ParsedMove: (
+                result: MoveParseResult(enum): 
+                    {
+                        OK = auto()
+                        INVALID = auto()
+                        NOT_UNDERSTOOD = auto()
+                        AMBIGUOUS = auto()
+                    }, 
+                uci: str | None = None
+            )
         """        
-        # Check what castling is available for current player
-        if self.player_color == chess.WHITE:
-            rank = "1"
-            can_kingside = self.board.has_kingside_castling_rights(chess.WHITE)
-            can_queenside = self.board.has_queenside_castling_rights(chess.WHITE)
-        else:
-            rank = "8"
-            can_kingside = self.board.has_kingside_castling_rights(chess.BLACK)
-            can_queenside = self.board.has_queenside_castling_rights(chess.BLACK)
-            
+        # Check castling availability
+        can_kingside = self.board.has_kingside_castling_rights(self.player_color)
+        can_queenside = self.board.has_queenside_castling_rights(self.player_color)
+        
         # No castling available
         if not can_kingside and not can_queenside:
-            return None
+            return ParsedMove(MoveParseResult.INVALID)
         
         text_lower = text.lower()
         
-        # Absolute indicators
-        if any(phrase in text_lower for phrase in ["queenside", "long", "o-o-o", "O-O-O"]):
-            return f"" if can_queenside else None
-        # TODO: Add helper function to calculate uci notation for each castle in respective position (so it supports chess960 eventually)
-        if any(phrase in text_lower for phrase in ["kingside", "short", "o-o", "O-O"]):
-            return f"" if can_kingside else None
+        # Determine which side is being requested (None if ambiguous/unclear)
+        requested_side = self._parse_castle_side(text_lower)
         
-        # Directional indicators
+        # Handle different outcomes
+        if requested_side is None:
+            # Could be ambiguous generic "castle" or not understood
+            if "castle" in text_lower or "castles" in text_lower:
+                if can_kingside and can_queenside:
+                    return ParsedMove(MoveParseResult.AMBIGUOUS)
+                # Only one option available - use it
+                is_kingside = can_kingside  # True if kingside available, else False (queenside)
+                return ParsedMove(MoveParseResult.OK, self._build_castle_uci(is_kingside))
+            return ParsedMove(MoveParseResult.NOT_UNDERSTOOD)
+        
+        # Check if requested side is legal
+        is_kingside = requested_side
+        if (is_kingside and can_kingside) or (not is_kingside and can_queenside):
+            return ParsedMove(MoveParseResult.OK, self._build_castle_uci(is_kingside))
+        
+        return ParsedMove(MoveParseResult.INVALID)    
+    
+    def _parse_castle_side(self, text_lower: str) -> bool:
+        """
+        Determine which castling side is requested from text.
+        
+        Args:
+            text_lower: Lowercased user input
+            
+        Returns:
+            True for kingside, False for queenside, None if ambiguous/unclear
+        """
+        # Absolute indicators
+        if any(phrase in text_lower for phrase in ["queenside", "long", "o-o-o"]):
+            return False
+        
+        if any(phrase in text_lower for phrase in ["kingside", "short", "o-o"]):
+            return True
+        
+        # Directional indicators (depend on player color)
         if "left" in text_lower:
             # White's left = queenside, Black's left = kingside
-            if self.player_color == chess.WHITE:
-                return f"" if can_queenside else None
-            else:
-                return f"" if can_kingside else None
+            return self.player_color == chess.BLACK
         
-        elif "right" in text_lower:
-            #  White's right = kingside, Black's right = queenside
-            if self.player_color == chess.WHITE:
-                return f"" if can_kingside else None
-            else:
-                return f"" if can_queenside else None
-            
-        # Generic "castle" - check what's available
-        else:
-            if can_kingside and can_queenside:
-                return "ambiguous"
-            elif can_kingside:
-                return f""
-            elif can_queenside:
-                return f""
-            
+        if "right" in text_lower:
+            # White's right = kingside, Black's right = queenside
+            return self.player_color == chess.WHITE
+        
+        # Ambiguous/unclear
         return None
+    
+    def _build_castle_uci(self, is_kingside: bool) -> str:
+        """
+        Build UCI notation for castling move.
+        
+        Args:
+            is_kingside: True for kingside (O-O), False for queenside (O-O-O)
+            
+        Returns:
+            UCI string (e.g., "e1g1" for white kingside)
+        """
+        rank = "1" if self.player_color == chess.WHITE else "8"
+        # TODO: (Optional) Refactor target file and 'e' when implementing chess960
+        target_file = "g" if is_kingside else "c"
+        return f"e{rank}{target_file}{rank}"
     
     def play_move(self, move_uci: str) -> tuple[bool, str]:
         """
@@ -112,8 +148,7 @@ class GameState:
             
         Returns:
             Tuple of (success, status):
-            - (True, "move_executed") if move was successful
-            - (False, "ambiguous") if move needs clarification
+            - (True, "move_executed") if move was successful            
             - (False, "illegal") if move is not legal
             - (False, "execution_failed") if move validation passed but execution failed
         """
@@ -245,6 +280,14 @@ class GameState:
         Get player's color as a string.
         """
         return "white" if self.player_color == chess.WHITE else "black"
+    
+    def _build_castle(self, rank: str, dir: bool) -> str:
+        """
+        
+        """
+        
+        
+        return 
     
 # ---------------------------------------------------------
 # CHESS.COM ADAPTER (stub until API access is granted)
