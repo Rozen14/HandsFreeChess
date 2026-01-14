@@ -136,12 +136,12 @@ class GameController:
         """
         castle_result = self.game.parse_castling_intent(text)
         
-        if castle_result.result is None: 
+        if castle_result.result == MoveParseResult.INVALID or castle_result.result == MoveParseResult.NOT_UNDERSTOOD: 
             self.tts.speak("Castling is not legal in this position.")
             return True
         
         # Check if ambiguous (both side available)
-        if castle_result.result == AMBIGUOUS:
+        if castle_result.result == MoveParseResult.AMBIGUOUS:
             self.tts.speak("Which side? Kingisde or queenside?")
             self.pending_move = "castle"
             return True
