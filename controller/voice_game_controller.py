@@ -33,14 +33,8 @@ class GameController:
         # Additional parameter that allows for testing when equals human or stockfish...
         self.opponent_type = opponent_type # Literal["human", "stockfish", "online"]
 
-        if self.board_view and self.opponent_type != "online":
+        if self.board_view:
             self.board_view.set_game(game)
-            self.vis_thread = threading.Thread(
-                target=self.board_view.run,
-                daemon=True
-            )
-            self.vis_thread.start()
-            time.sleep(0.5)
         
     def handle_speech(self, text: str) -> bool:
         """

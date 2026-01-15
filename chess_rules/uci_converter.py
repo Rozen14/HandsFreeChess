@@ -20,7 +20,7 @@ class UCIConverter:
         """
         self.board = board
     
-    def to_uci(self, text: str) -> str | None:
+    def to_uci(self, text: str) -> ParsedMove:
         """
         Convert any chess move format to UCI.
         
