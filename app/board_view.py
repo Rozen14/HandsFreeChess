@@ -1,6 +1,7 @@
 import pygame
 import chess
 import os
+import threading
 
 SQUARE_SIZE = 80
 BOARD_SIZE = 8 * SQUARE_SIZE
@@ -23,6 +24,8 @@ class SimpleBoardVisualizer:
         self.pieces = self._load_pieces()
         self.running = True
         self.needs_redraw = True
+        self.game = None
+        self.lock = threading.Lock()
 
     def _load_pieces(self):
         pieces = {}
@@ -34,32 +37,52 @@ class SimpleBoardVisualizer:
             )
         return pieces
 
+    def set_game(self, game):
+        """Set the game reference for the visualizer."""
+        with self.lock:
+            self.game = game
+            self.needs_redraw = True
+
     def render(self):
+        """Request a redraw of the board."""
         self.needs_redraw = True
 
-    def run(self, game):
+    def run(self):
+        """Main pygame event loop. Should be called in main thread or started in a thread."""
         clock = pygame.time.Clock()
         
         while self.running:
+            # Process pygame events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
-                
-            if self.needs_redraw:
-                self._draw(game)
-                self.needs_redraw = False
             
-            clock.tick(60)
+            # Redraw if needed
+            if self.needs_redraw and self.game:
+                with self.lock:
+                    self._draw()
+                    self.needs_redraw = False
+            
+            clock.tick(60)  # 60 FPS
+        
+        self.close()
 
     def stop(self):
+        """Stop the visualizer loop."""
         self.running = False
     
     def close(self):
+        """Clean up pygame resources."""
         pygame.quit()        
         
-    def _draw(self, game): 
-        board = game.board
+    def _draw(self): 
+        """Draw the current board state."""
+        if not self.game:
+            return
+            
+        board = self.game.board
         
+        # Draw squares
         for rank in range(8):
             for file in range(8):
                 color = LIGHT if (rank + file) % 2 == 0 else DARK
@@ -74,13 +97,13 @@ class SimpleBoardVisualizer:
                     )
                 )
         
+        # Draw pieces
         for square, piece in board.piece_map().items():
             file = chess.square_file(square)
-            rank = 7 - chess.square_rank(square)
+            rank = 7 - chess.square_rank(square)  # Flip rank for display
             self.screen.blit(
                 self.pieces[piece.symbol()],
                 (file * SQUARE_SIZE, rank * SQUARE_SIZE)
             )
         
         pygame.display.flip()
-        

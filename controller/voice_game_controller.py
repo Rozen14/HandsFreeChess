@@ -3,6 +3,7 @@ from chess_rules import uci_converter as uc
 from chess_rules.move_parse_result import MoveParseResult
 from voice_output import game_announcer as ga
 import threading
+import time
 
 # TODO: Remove prints for proper logging...
 
@@ -31,7 +32,16 @@ class GameController:
         
         # Additional parameter that allows for testing when equals human or stockfish...
         self.opponent_type = opponent_type # Literal["human", "stockfish", "online"]
-    
+
+        if self.board_view and self.opponent_type != "online":
+            self.board_view.set_game(game)
+            self.vis_thread = threading.Thread(
+                target=self.board_view.run,
+                daemon=True
+            )
+            self.vis_thread.start()
+            time.sleep(0.5)
+        
     def handle_speech(self, text: str) -> bool:
         """
         Main speech command handler.
@@ -105,12 +115,8 @@ class GameController:
             # and flow continues, how does he ask for repetition?
             
             # Visualize board
-            if self.opponent_type != "online":
-                threading.Thread(
-                    target=self.board_view.run,
-                    args=(self.game,),
-                    daemon=True
-                ).start()
+            if self.board_view and self.opponent_type != "online":
+                self.board_view.render()
             
             # Check for check
             if self.game.board.is_check():
@@ -267,12 +273,8 @@ class GameController:
             return True
         
         # 2.2 Visualize opponent move
-        if self.opponent_type != "online":
-                threading.Thread(
-                    target=self.board_view.run,
-                    args=(self.game,),
-                    daemon=True
-                ).start()
+        if self.board_view and self.opponent_type != "online":
+            self.board_view.render()
         
         # 3. Announce opponent move
         opponent_color = "black" if self.game.player_color == "white" else "white"

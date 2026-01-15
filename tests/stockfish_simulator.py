@@ -3,6 +3,7 @@ import chess.engine
 from pathlib import Path
 import sys
 import threading
+import time
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -115,16 +116,23 @@ def simulate_game_vs_stockfish():
     
     # Initialize visualizer
     visualizer = view()
+    visualizer.set_game(game)
+    
+    # Start visualizer in separate thread
+    vis_thread = threading.Thread(target=visualizer.run, daemon=True)
+    vis_thread.start()
+    
+    # Give pygame time to initialize
+    time.sleep(0.5)
     
     # Initialize controller (no simulation mode - Stockfish handles opponent)
     controller = vgc.GameController(game, tts, board_view=visualizer, opponent_type="stockfish")
     
     def wait_with_stockfish(timeout=360):
         """
-        
+        Get Stockfish's move.
         """
-        print("\n[Stockfish is thinking...]")
-        
+        print("\n[Stockfish is thinking...]")        
         return stockfish.get_move(game.board)
     
     controller.wait_for_opponent_move = wait_with_stockfish
@@ -145,10 +153,10 @@ def simulate_game_vs_stockfish():
     except KeyboardInterrupt:
         print("\n\nGame interrupted by user")
     finally:
+        visualizer.stop()
         stockfish.close()
         recognizer.cleanup()
         tts.shutdown()
-        visualizer.close()
         print("\nGoodbye!")
     
 def simulate_game_vs_itself():
@@ -174,15 +182,17 @@ def simulate_game_vs_itself():
     game = GameState(player_color="white")
     tts = TextToSpeech()
     visualizer = view()
+    visualizer.set_game(game)
+    
+    # Start visualizer thread
+    vis_thread = threading.Thread(target=visualizer, daemon=True)
+    vis_thread.start()
+    
+    # Give pygame time to initialize
+    time.sleep(0.5)
     
     from voice_output.game_announcer import MoveAnnouncer
     announcer = MoveAnnouncer()
-    
-    threading.Thread(
-        target=visualizer.run,
-        args=(game,),
-        daemon=True
-    ).start()
     
     move_count = 0
     
@@ -225,9 +235,10 @@ def simulate_game_vs_itself():
         input("\nPress Enter to exit...")
         
     finally:
+        visualizer.stop()
         white_engine.close()
         black_engine.close()
-        visualizer.close()
+        tts.shutdown()
         
 if __name__ == "__main__":
     print("Chess Testing Modes:\n")
