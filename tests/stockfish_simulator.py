@@ -116,14 +116,6 @@ def simulate_game_vs_stockfish():
     
     # Initialize visualizer
     visualizer = view()
-    visualizer.set_game(game)
-    
-    # Start visualizer in separate thread
-    vis_thread = threading.Thread(target=visualizer.run, daemon=True)
-    vis_thread.start()
-    
-    # Give pygame time to initialize
-    time.sleep(0.5)
     
     # Initialize controller (no simulation mode - Stockfish handles opponent)
     controller = vgc.GameController(game, tts, board_view=visualizer, opponent_type="stockfish")
@@ -132,8 +124,11 @@ def simulate_game_vs_stockfish():
         """
         Get Stockfish's move.
         """
-        print("\n[Stockfish is thinking...]")        
-        return stockfish.get_move(game.board)
+        print("\n[Stockfish is thinking...]")     
+        move = stockfish.get_move(game.board)
+        uci_move = move.uci()
+        print(f"[Stockfish plays: {uci_move}]")
+        return uci_move
     
     controller.wait_for_opponent_move = wait_with_stockfish
     
@@ -144,9 +139,6 @@ def simulate_game_vs_stockfish():
     print("=" * 60 + "\n")
     
     tts.speak("Game started. You are white. Make your move.")
-    
-    # Render initial board
-    visualizer.render()
     
     try:
         recognizer.listen_loop(callback=controller.handle_speech)
@@ -186,7 +178,7 @@ def simulate_game_vs_itself():
     
     # Start visualizer thread
     vis_thread = threading.Thread(target=visualizer, daemon=True)
-    vis_thread.start()
+    vis_thread.run()
     
     # Give pygame time to initialize
     time.sleep(0.5)

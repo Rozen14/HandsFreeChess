@@ -279,6 +279,7 @@ class GameController:
         # 3. Announce opponent move
         opponent_color = "black" if self.game.player_color == "white" else "white"
         
+        # TODO: this converts to SAN, refactor
         if not isinstance(opponent_move, str):
             opponent_move = self.game.board.san(opponent_move)
             
