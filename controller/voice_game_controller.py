@@ -2,8 +2,7 @@ from voice_input import intent_classifier as ic
 from chess_rules import uci_converter as uc
 from chess_rules.move_parse_result import MoveParseResult
 from voice_output import game_announcer as ga
-import threading
-import time
+from chess import COLORS
 
 # TODO: Remove prints for proper logging...
 
@@ -102,7 +101,7 @@ class GameController:
         success, error = self.game.play_move(uci)
         
         if success:             
-            announcement = self.announcer.announce_move(uci, board_before_move)
+            announcement = self.announcer.announce_move_from_board(uci, board_before_move)
             self.tts.speak(announcement)
             self.last_announcement = announcement
             # TODO: if user wants to listen to this announcement again
@@ -200,15 +199,16 @@ class GameController:
         #     self.tts.speak(elo_announcement)
         #     self.last_announcement = announcement
     
-    def announce_opponent_move(self, move_san: str, opponent_color: str) -> None:
+    def announce_opponent_move(self, move_uci: str, opponent_color: str, board_before_move) -> None:
         """
         Announce opponent's move.
         
         Args:
-            move_san: Opponent's move in SAN notation
+            move_san: Opponent's move in UCI notation
             opponent_color: "white" or "black"
-        """
-        announcement = self.announcer.announce_opponent_move(move_san, opponent_color)
+        """        
+        move_uci = self.announcer.announce_move_from_board(move_uci, board_before_move)
+        announcement = self.announcer.announce_opponent_move(move_uci, opponent_color)
         self.tts.speak(announcement)
         self.last_announcement = announcement
     
@@ -242,7 +242,7 @@ class GameController:
             False if game ended, True otherwise
         """
         # TODO: Flow takes too long between announcing player's move and saying this...
-        self.tts.speak("Waiting for opponent.")
+        self.tts.speak("Waiting for opponent.")                
         
         # 1. Get opponent move
         if self.opponent_type != "human":
@@ -256,7 +256,9 @@ class GameController:
             
         else:           
             print("\n=== Simulating opponent move ===")
-            opponent_move = input("Enter opponent's move in SAN (e.g., 'e5', 'Nf6'): ").strip()
+            opponent_move = input("Enter opponent's move in UCI (e.g., 'e7e5', 'g8f6'): ").strip()
+
+        board_before_move = self.game.board.copy()
 
         # 2.1 Apply opponent move
         success = self.game.play_opponent_move(opponent_move)
@@ -264,6 +266,7 @@ class GameController:
         if not success:
             # Should never get here in live games or games vs an engine...
             self.tts.speak("Opponent played an invalid move")
+            print(f"DEBUG: Invalid move: {opponent_move}")
             return True
         
         # 2.2 Visualize opponent move
@@ -271,13 +274,9 @@ class GameController:
             self.board_view.render()
         
         # 3. Announce opponent move
-        opponent_color = "black" if self.game.player_color == "white" else "white"
+        opponent_color = "black" if self.game.player_color == COLORS[0] else "white"
         
-        # TODO: this converts to SAN, refactor
-        if not isinstance(opponent_move, str):
-            opponent_move = self.game.board.san(opponent_move)
-            
-        self.announce_opponent_move(opponent_move, opponent_color)
+        self.announce_opponent_move(opponent_move, opponent_color, board_before_move)
         
         # 4. Check check
         if self.game.board.is_check():

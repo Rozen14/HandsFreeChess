@@ -25,6 +25,7 @@ class SimpleBoardVisualizer:
         self.running = True
         self.needs_redraw = True
         self.game = None
+        self.lock = threading.Lock()
 
     def _load_pieces(self):
         pieces = {}

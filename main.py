@@ -5,6 +5,8 @@ from controller import voice_game_controller as vgc
 from utils.environment import setup_ffmpeg
 from utils.audio_setup import setup_microphone 
 from app.board_view import SimpleBoardVisualizer
+import time
+import threading
 
 # TODO: Remove prints for proper logging...
 # TODO: Migrate main to app/ when implementing minimal UI...
@@ -27,25 +29,41 @@ def main():
     # Initialize game
     game = gi.GameState()
     # TODO: finish initialization of game...
-    # If user moves second, wait until opponent makes move, etc.
-    # (keep in mind rematches etc.)
     
     # Initialize visualizer
     board_view = SimpleBoardVisualizer()
     
     # Initialize controller
-    controller = vgc.GameController(game, tts, board_view=board_view)
+    controller = vgc.GameController(
+        game, 
+        tts, 
+        board_view=board_view,
+    
+    ) 
     
     print("\nVoice Chess Interface Started")
     print("Say 'stop' to exit\n") # TODO: Implement exit
     
+    # STT thread
+    stt_thread = threading.Thread(
+        target=recognizer.listen_loop,
+        kwargs={"callback": controller.handle_speech},
+        daemon = True
+    )
+    stt_thread.start()
+    
+    # Start APP LOOP
+    # app = AppLoop(controller, board_view)
+    
     try:
-        callback = controller.handle_speech        
-        recognizer.listen_loop(callback=callback)
+        # app.run()
+        while True:
+            time.sleep(0.1)
         
     except KeyboardInterrupt:
         print("\nStopping...")
     finally:
+        # app.stop()
         recognizer.cleanup()
         print("Goodbye!")
 

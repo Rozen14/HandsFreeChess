@@ -25,47 +25,34 @@ class MoveAnnouncer:
             chess.PAWN: "pawn"
         }
     
-    def announce_move(self, move_uci: str, board: chess.Board) -> str:
+    def announce_move(self, move_uci: str, piece_type: int, is_capture: bool = False, 
+                     is_castling: bool = False, castling_side: Optional[str] = None,
+                     promotion: Optional[int] = None) -> str:
         """
         Announce a move in natural language.
         
         Args:
-            move_uci: Move in UCI notation (e.g., "e2e4", "e1g1")
-            board: Board state BEFORE the move (to check piece types)
+            move_uci: Move in UCI notation (e.g., "e2e4")
+            piece_type: chess.PAWN, chess.KNIGHT, etc.
+            is_capture: Whether the move captures a piece
+            is_castling: Whether this is a castling move
+            castling_side: "kingside" or "queenside" if castling
+            promotion: Promotion piece type (chess.QUEEN, etc.) if applicable
             
         Returns:
             Natural language description
         """
-        try:
-            move = chess.Move.from_uci(move_uci)
-        except:
-            return ParsedMove(MoveParseResult.INVALID)
+        # Castling
+        if is_castling:
+            return f"Castled {castling_side}"
         
-        from_square = move.from_square
-        to_square = move.to_square
+        # Get destination square
+        dest = move_uci[2:4]  # Extract destination from UCI (e.g., "e4" from "e2e4")
+        piece_name = self.piece_symbols[piece_type]
         
-        # Get the piece that's moving
-        piece = board.piece_at(from_square)
-        if not piece:
-            return ParsedMove(MoveParseResult.INVALID)
-        
-        piece_name = self.piece_symbols[piece.piece_type]
-        dest = chess.square_name(to_square)
-        
-        # Check for castling
-        if piece.piece_type == chess.KING:
-            # King moving 2 squares = castling
-            from_file = chess.square_file(from_square)
-            to_file = chess.square_file(to_square)
-            if abs(from_file - to_file) == 2:
-                return "Castled kingside" if to_file > from_file else "Castled queenside"
-        
-        # Check for capture
-        is_capture = board.is_capture(move)
-        
-        # Check for promotion
-        if move.promotion:
-            promo_name = self.piece_symbols[move.promotion]
+        # Promotion
+        if promotion:
+            promo_name = self.piece_symbols[promotion]
             if is_capture:
                 return f"Pawn takes {dest} and promotes to {promo_name}"
             else:
@@ -77,22 +64,88 @@ class MoveAnnouncer:
         else:
             return f"{piece_name.capitalize()} to {dest}"
     
-    
-    def announce_opponent_move(self, move_uci: str, board: chess.Board, opponent_color: str) -> str:
+    def announce_move_from_board(self, move_uci: str, board: chess.Board) -> str:
         """
-        Announce opponent's move with color prefix.
+        Announce a move by inspecting the board state (convenience method).
+        
+        Use this when you have the board available and want simple announcement.
+        For better performance, use announce_move() with pre-computed info.
         
         Args:
             move_uci: Move in UCI notation
             board: Board state BEFORE the move
+            
+        Returns:
+            Natural language description
+        """
+        try:
+            move = chess.Move.from_uci(move_uci)
+        except:
+            return "Invalid move"
+        
+        from_square = move.from_square
+        to_square = move.to_square
+        
+        # Get the piece that's moving
+        piece = board.piece_at(from_square)
+        if not piece:
+            return "Invalid move"
+        
+        piece_type = piece.piece_type
+        
+        # Check for castling
+        is_castling = False
+        castling_side = None
+        if piece_type == chess.KING:
+            from_file = chess.square_file(from_square)
+            to_file = chess.square_file(to_square)
+            if abs(from_file - to_file) == 2:
+                is_castling = True
+                castling_side = "kingside" if to_file > from_file else "queenside"
+        
+        # Check for capture
+        is_capture = board.is_capture(move)
+        
+        # Get promotion
+        promotion = move.promotion
+        
+        return self.announce_move(
+            move_uci, 
+            piece_type, 
+            is_capture=is_capture,
+            is_castling=is_castling,
+            castling_side=castling_side,
+            promotion=promotion
+        )    
+    
+    def announce_opponent_move(self, move_uci: str, opponent_color: str) -> str:
+        """
+        Announce opponent's move with color prefix.
+        
+        This is a lightweight version that just formats the move description.
+        The caller should provide the move description using announce_move_from_board().
+        
+        Args:
+            move_uci: Already-formatted move description (e.g., "Pawn to e4")
+                     OR UCI string if you want simple format
             opponent_color: "white" or "black"
             
         Returns:
-            Announcement with color
+            Announcement with color prefix
         """
         color_name = opponent_color.capitalize()
-        move_desc = self.announce_move(move_uci, board)
-        return f"{color_name} played {move_desc.lower()}"
+        
+        # If it looks like a move description, use it directly
+        # Otherwise treat as UCI and create simple announcement
+        if " " in move_uci or len(move_uci) > 6:
+            # Already a description like "Pawn to e4"
+            move_desc = move_uci
+        else:
+            # Simple UCI format: just announce the squares
+            dest = move_uci[2:4] if len(move_uci) >= 4 else move_uci
+            move_desc = f"moved to {dest}"
+        
+        return f"{color_name} {move_desc.lower()}"
     
     def announce_material_count(self, material_summary: dict) -> str:
         """
