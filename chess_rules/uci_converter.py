@@ -2,7 +2,6 @@ import chess
 import re
 from chess_rules.move_parse_result import ParsedMove, MoveParseResult
 
-# TODO: Refactor where move_parser.py was originally used...
 class UCIConverter:
     """
     Converts natural language and various chess notations to UCI.

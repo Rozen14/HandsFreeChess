@@ -146,10 +146,9 @@ class GameController:
             return True
         
         # Execute castling
-        success, error = self.game.play_move(castle_result)
+        success, error = self.game.play_move(castle_result.uci)
         
-        if success:
-            # TODO: Finish, maybe refactor inside gi as to recieve tuple for castle_result...
+        if success:            
             side = ""   
             announcement = f"Castled {side}" 
             self.tts.speak(announcement)

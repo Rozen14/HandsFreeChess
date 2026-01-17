@@ -3,86 +3,231 @@ from sentence_transformers import SentenceTransformer, util
 # current board position (?), others...
 # TODO: Maybe add more colloquial examples so it can understand slang (?)
 
+INTENT_PATTERNS = {
+    "move": [
+        # Standard piece moves
+        "pawn to e4",
+        "knight to f3",
+        "bishop to c4",
+        "rook to e1",
+        "queen to d4",
+        "king to g1",
+        
+        # Variations without "to"
+        "pawn e4",
+        "knight f3",
+        "bishop c4",
+        
+        # Phonetic variations (what STT might produce)
+        "night to f3",  # "knight" → "night"
+        "night f3",
+        "night to see 3",  # "c3" → "see 3"
+        "night to sea 3",
+        "night c3",
+        "bishop b4",
+        "bishop be 4",
+        "bishop bee four",
+        
+        # Destination-only (common in casual speech)
+        "e4",
+        "f3",
+        "c3",
+        "d3",
+        "d4",
+        "e5",
+        
+        # With articles
+        "pawn on to d3",  # "pawn to d3" → "on to d3"
+        "pawn onto d3",
+        "the pawn to e4",
+        "a knight to f3",
+        
+        # Captures
+        "pawn takes e5",
+        "knight takes d4",
+        "bishop takes f7",
+        "take with knight",
+        "capture on e5",
+        
+        # Common misheard patterns
+        "so d3",  # "to d3" → "so d3"
+        "two d3",
+        "too d3",
+        
+        # File-only moves
+        "d file",
+        "e file",
+        
+        # With check/checkmate
+        "queen to h5 check",
+        "bishop to b4 check",
+    ],
+    
+    "castle": [
+        # Standard terms
+        "castle",
+        "castle kingside",
+        "castle queenside",
+        "castle short",
+        "castle long",
+        "kingside castle",
+        "queenside castle",
+        
+        # Directional
+        "castle left",
+        "castle right",
+        
+        # Abbreviated
+        "o-o",
+        "o-o-o",
+        "zero zero",
+        "zero zero zero",
+        
+        # Common misheard (this is your issue!)
+        "passel",  # "castle" → "passel"
+        "cassel",
+        "cassle",
+        "kassel",
+        "kassle",
+        "pastel",
+        "pascal",
+        "castile",
+        "castles",
+        
+        # With side (misheard)
+        "passel kingside",
+        "passel queenside",
+        "cassel kingside",
+        "cassel queenside",
+        
+        # Variations
+        "castle king side",
+        "castle queen side",
+        "short castle",
+        "long castle",
+    ],
+    
+    "resign": [
+        "resign",
+        "I resign",
+        "forfeit",
+        "give up",
+        "I give up",
+        "concede",
+    ],
+    
+    "draw": [
+        "offer draw",
+        "draw",
+        "offer a draw",
+        "request draw",
+        "I want a draw",
+    ],
+    
+    "repeat": [
+        "repeat",
+        "say that again",
+        "what did you say",
+        "repeat that",
+        "again",
+        "come again",
+        "pardon",
+    ],
+    
+    "new_game": [
+        "new game",
+        "start new game",
+        "restart",
+        "play again",
+        "fresh game",
+    ],
+    
+    "rematch": [
+        "rematch",
+        "play again",
+        "another game",
+        "one more game",
+    ],
+    
+    # "positions": [
+        
+    # ],
+    
+    # "time": [
+        
+    # ],
+}
+
+# Phonetic mapping for common STT errors
+PHONETIC_CORRECTIONS = {
+    # Pieces
+    "night": "knight",
+    "nite": "knight",
+    "nights": "knights",
+    
+    # Files (letters)
+    "see": "c",
+    "sea": "c",
+    "be": "b",
+    "bee": "b",
+    "dee": "d",
+    "ee": "e",
+    "ef": "f",
+    "gee": "g",
+    "aitch": "h",
+    
+    # Castling
+    "passel": "castle",
+    "cassel": "castle",
+    "cassle": "castle",
+    "kassel": "castle",
+    "kassle": "castle",
+    "pastel": "castle",
+    "pascal": "castle",
+    "castile": "castle",
+    
+    # Directions
+    "two": "to",
+    "too": "to",
+    "so": "to",
+    "on to": "onto",
+    "onto": "to",
+    
+    # Common words
+    "the": "",  # Remove articles
+    "a": "",
+    "an": "",
+}
+
+def preprocess_text(text: str) -> str:
+    """
+    Preprocess text to correct common STT errors.
+    
+    Args:
+        text: Raw STT output
+    
+    Returns:
+        Corrected text
+    """
+    text_lower = text.lower().strip()
+    
+    # Apply phonetic corrections
+    words = text_lower.split()
+    corrected_words = []
+    
+    for word in words:
+        # Check if word needs correction
+        corrected = PHONETIC_CORRECTIONS.get(word, word)
+        if corrected:
+            corrected_words.append(corrected)
+    
+    return " ".join(corrected_words)
+    
 class IntentClassifier:
     def __init__(self) -> None:
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
                 
-        self.intents = {
-            "castle": [
-                "castle",
-                "castle kingside",
-                "castle queenside",
-                "short castle",
-                "long castle",
-            ],
-            "move": [
-                # Natural language patterns (diverse phrasing)
-                "knight to e5",
-                "pawn takes e4",
-                "move the rook to a7",
-                "bishop captures on f3",
-                "promote to queen",
-                # Algebraic/UCI patterns
-                "knight f3",
-                "e2 e4",
-                "e7 e8 queen",
-            ],
-            "resign": [
-                "resign",
-                "I give up",
-                "forfeit the game",
-            ],
-            "draw": [
-                "offer a draw",
-                "propose draw",
-                "I want a draw",
-            ],
-            "new_game": [
-                "new game",
-                "start a new game",
-                "let's play again",
-            ],
-            "rematch": [
-                "rematch",
-                "run it back",
-                "one more game",
-            ],
-            "repeat": [
-                "repeat that",
-                "what did you say",
-                "say it again",
-            ],    
-            "material": [
-                "check material",
-                "material count",
-                "what's the material",
-                "who is up material",
-                "material balance",
-                "how many pieces do i have",
-                "what pieces are left"
-            ],
-            "time": [
-                # User's time
-                "what's my time",
-                "how much time do i have",
-                "how much time is left",
-                "my remaining time",
-                "check my clock",                
-                # Opponent's time
-                "what's your time",
-                "what's opponent time",
-                "how much time does my opponent have",
-                "opponent remaining time",
-                # Both times
-                "what's the time situation",
-                "check the clocks",
-                "how much time do we have",
-                "time left"
-            ],
-            "positions": [
-                
-            ],
-        }
+        self.intents = INTENT_PATTERNS
         
         # Pre-embed the examples 
         self.intent_embeddings = {
@@ -92,7 +237,9 @@ class IntentClassifier:
         }
     
     def predict(self, text: str, threshold: float = 0.5) -> None | str:
-        text_emb = self.model.encode(text, convert_to_tensor=True)
+        corrected_text = preprocess_text(text)
+        
+        text_emb = self.model.encode(corrected_text, convert_to_tensor=True)
 
         best_intent = None
         best_score = -1

@@ -13,6 +13,7 @@ from voice_input.speech_to_text import SpeechRecognizer
 from voice_output.text_to_speech import TextToSpeech 
 from app.board_view import SimpleBoardVisualizer as view
 from controller import voice_game_controller as vgc
+from app.app_loop import AppLoop
 import os
 
 
@@ -59,6 +60,7 @@ class StockfishOpponent:
     def close(self):
         """Clean up engine resources."""
         self.engine.quit()
+        
         
 def simulate_game_vs_stockfish():
     """
@@ -132,6 +134,14 @@ def simulate_game_vs_stockfish():
     
     controller.wait_for_opponent_move = wait_with_stockfish
     
+    # Start speech recognition in background thread
+    stt_thread = threading.Thread(
+        target=recognizer.listen_loop,
+        kwargs={"callback": controller.handle_speech},
+        daemon=True
+    )
+    stt_thread.start()
+    
     print("\n" + "=" * 60)
     print("Game started! You are WHITE, Stockfish is BLACK")
     print("Say your moves out loud (e.g., 'pawn to e4', 'knight f3')")
@@ -140,12 +150,18 @@ def simulate_game_vs_stockfish():
     
     tts.speak("Game started. You are white. Make your move.")
     
+    # Trigger initial render
+    visualizer.render()
+    
+    # Start main application loop (handles pygame in main thread)
+    app = AppLoop(controller, visualizer)
+    
     try:
-        recognizer.listen_loop(callback=controller.handle_speech)
+        app.run(tick_rate=60)
     except KeyboardInterrupt:
         print("\n\nGame interrupted by user")
     finally:
-        visualizer.stop()
+        app.stop()
         stockfish.close()
         recognizer.cleanup()
         tts.shutdown()
@@ -176,62 +192,91 @@ def simulate_game_vs_itself():
     visualizer = view()
     visualizer.set_game(game)
     
-    # Start visualizer thread
-    vis_thread = threading.Thread(target=visualizer, daemon=True)
-    vis_thread.run()
-    
-    # Give pygame time to initialize
-    time.sleep(0.5)
-    
     from voice_output.game_announcer import MoveAnnouncer
     announcer = MoveAnnouncer()
     
     move_count = 0
+    last_move_time = time.time()
+    move_delay = 1.0  # 1 second between moves
+    
+    print("\n" + "=" * 60)
+    print("Watching Stockfish vs Stockfish")
+    print("Close the board window to quit")
+    print("=" * 60 + "\n")
+    
+    # Trigger initial render
+    visualizer.render()
     
     try:
-        while not game.is_game_over() and move_count < 100:
-            # White's turn
-            print(f"\nMove {move_count + 1}: White")
-            move_san = white_engine.get_move(game.board)
-            game.play_opponent_move(move_san)
-            
-            announcement = announcer.announce_opponent_move(move_san, "white")
-            print(f"  {announcement}")
-            tts.speak(announcement)
-            
-            visualizer.render()
-            
-            if game.is_game_over():
+        while visualizer.running and not game.is_game_over() and move_count < 100:
+            # Process pygame events
+            if not visualizer.pump_events():
                 break
             
-            # Black's turn
-            print(f"Move {move_count + 1}: Black")
-            move_san = black_engine.get_move(game.board)
-            game.play_opponent_move(move_san)
+            # Render board
+            visualizer.render_if_needed()
             
-            announcement = announcer.announce_opponent_move(move_san, "black")
-            print(f"  {announcement}")
-            tts.speak(announcement)
+            # Make move if enough time has passed 
+            current_time = time.time()
             
-            visualizer.render()
+            if current_time - last_move_time >= move_delay:
+                # Determine whose turn
+                is_white_turn = game.board.turn == chess.WHITE
+
+                if is_white_turn:
+                    # White's turn
+                    print(f"\nMove {move_count + 1}: White")
+                    move = white_engine.get_move(game.board)
+                    color = "white"
+                else:
+                    # Black's turn
+                    print(f"Move {move_count + 1}: Black")
+                    move = black_engine.get_move(game.board)
+                    color = "black"
+                
+                move_uci = move.uci()
+                
+                # Store board before move
+                board_before = game.board.copy()
+                
+                # Apply move
+                game.play_opponent_move(move_uci)
+                
+                # Announce
+                move_desc = announcer.announce_move_from_board(move_uci, board_before)
+                announcement = f"{color.capitalize()} {move_desc.lower()}"
+                print(f"  {announcement}")
+                tts.speak(announcement)
+
+                # Trigger redraw
+                visualizer.render()
             
-            move_count += 1
+                # Update timing
+                last_move_time = current_time
+                if is_white_turn:
+                    move_count += 1
+                    
+                # Small delay for frame rate
+                time.sleep(1/60)
+                
+            # Game over
+            if game.is_game_over():
+                result = game.get_result()
+                print(f"\n{result}")
+                tts.speak(f"Game over. {result}")
             
-            import time
-            time.sleep(0.5)  # Pause between moves
-        # Game over
-        result = game.get_result()
-        print(f"\n{result}")
-        tts.speak(f"Game over. {result}")
-        
-        input("\nPress Enter to exit...")
-        
+            print("\nPress Enter to exit...")
+            input()
+    except KeyboardInterrupt:
+        print("\n\nInterrupted by user")
     finally:
         visualizer.stop()
+        visualizer.close()
         white_engine.close()
         black_engine.close()
         tts.shutdown()
-        
+         
+         
 if __name__ == "__main__":
     print("Chess Testing Modes:\n")
     print("1. Play vs Stockfish (voice input)")

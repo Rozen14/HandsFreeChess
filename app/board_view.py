@@ -16,6 +16,19 @@ PIECE_MAP = {
 
 
 class SimpleBoardVisualizer:
+    """
+    Board visualizer designed to run in main thread via pump_events().
+    
+    Usage:
+        visualizer = SimpleBoardVisualizer()
+        visualizer.set_game(game)
+        
+        # In main loop:
+        while running:
+            visualizer.pump_events()  # Process pygame events
+            visualizer.render_if_needed()  # Draw if needed
+            time.sleep(1/60)  # 60 FPS
+    """
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((BOARD_SIZE, BOARD_SIZE))
@@ -47,6 +60,24 @@ class SimpleBoardVisualizer:
         """Request a redraw of the board."""
         self.needs_redraw = True
 
+    def pump_events(self):
+        """
+        Process pygame events (call this from main thread loop).
+        Returns False if window was closed.
+        """
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+                return False
+        return True
+    
+    def render_if_needed(self):
+        """Draw the board if redraw is needed (call from main thread loop)."""
+        if self.needs_redraw and self.game:
+            with self.lock:
+                self._draw()
+                self.needs_redraw = False
+    
     def run(self):
         """Main pygame event loop. Should be called in main thread or started in a thread."""
         clock = pygame.time.Clock()
