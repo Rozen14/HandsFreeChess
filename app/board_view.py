@@ -13,7 +13,8 @@ PIECE_MAP = {
     'P': 'wp', 'N': 'wn', 'B': 'wb', 'R': 'wr', 'Q': 'wq', 'K': 'wk',
     'p': 'bp', 'n': 'bn', 'b': 'bb', 'r': 'br', 'q': 'bq', 'k': 'bk',
 }
-
+# TODO: Add game moves in SAN notation. To the right of the board
+# TODO: Add way to load game and start from there for testing purposes...
 
 class SimpleBoardVisualizer:
     """

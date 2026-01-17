@@ -63,38 +63,60 @@ class GameState:
                     }, 
                 uci: str | None = None
             )
-        """        
-        # Check castling availability
-        can_kingside = self.board.has_kingside_castling_rights(self.player_color)
-        can_queenside = self.board.has_queenside_castling_rights(self.player_color)
-        
-        # No castling available
-        if not can_kingside and not can_queenside:
-            return ParsedMove(MoveParseResult.INVALID)
-        
+        """                        
         text_lower = text.lower()
         
         # Determine which side is being requested (None if ambiguous/unclear)
         requested_side = self._parse_castle_side(text_lower)
         
-        # Handle different outcomes
+        # Build potential castling moves
+        potential_moves = []
+        
+        # Check if kingside castling is legal
+        if self.board.has_kingside_castling_rights(self.player_color):
+            kingside_uci = self._build_castle_uci(True)
+            try:
+                kingside_move = chess.Move.from_uci(kingside_uci)
+                if kingside_move in self.board.legal_moves:
+                    potential_moves.append(('kingside', kingside_uci))
+            except:
+                pass
+        
+        # Check if queenside castling is legal
+        if self.board.has_queenside_castling_rights(self.player_color):
+            queenside_uci = self._build_castle_uci(False)
+            try:
+                queenside_move = chess.Move.from_uci(queenside_uci)
+                if queenside_move in self.board.legal_moves:
+                    potential_moves.append(('queenside', queenside_uci))
+            except:
+                pass
+            
+        # No legal castling moves available
+        if not potential_moves:
+            return ParsedMove(MoveParseResult.INVALID)
+
+        # Handle based on what was requested
         if requested_side is None:
-            # Could be ambiguous generic "castle" or not understood
+            # Generic castle command
             if "castle" in text_lower or "castles" in text_lower:
-                if can_kingside and can_queenside:
+                if len(potential_moves) == 2:
+                    # Both sides legal - ambiguous
                     return ParsedMove(MoveParseResult.AMBIGUOUS)
-                # Only one option available - use it
-                is_kingside = can_kingside  # True if kingside available, else False (queenside)
-                return ParsedMove(MoveParseResult.OK, self._build_castle_uci(is_kingside))
-            return ParsedMove(MoveParseResult.NOT_UNDERSTOOD)
+                else:
+                    # Only one side legal 
+                    return ParsedMove(MoveParseResult.OK, potential_moves[0][1])
+
+        # Specific side requested
+        side_name = 'kingside' if requested_side else 'queenside'
         
-        # Check if requested side is legal
-        is_kingside = requested_side
-        if (is_kingside and can_kingside) or (not is_kingside and can_queenside):
-            return ParsedMove(MoveParseResult.OK, self._build_castle_uci(is_kingside))
+        for available_side, uci in potential_moves:
+            if available_side == side_name:
+                return ParsedMove(MoveParseResult.OK, uci)
+            
+        # Requested side not legal
+        return ParsedMove(MoveParseResult.INVALID)        
         
-        return ParsedMove(MoveParseResult.INVALID)    
-    
     def _parse_castle_side(self, text_lower: str) -> bool:
         """
         Determine which castling side is requested from text.
@@ -105,20 +127,25 @@ class GameState:
         Returns:
             True for kingside, False for queenside, None if ambiguous/unclear
         """
-        # Absolute indicators
-        if any(phrase in text_lower for phrase in ["queenside", "long", "o-o-o"]):
+        import re
+        
+        # Normalize: remove hyphens, normalize spaces
+        normalized = re.sub(r'[-_]', ' ', text_lower)
+        normalized = ' '.join(normalized.split())
+        
+        # Queenside patterns (check first - more specific)
+        if re.search(r'\b(queenside|queen\s+side|long|o-o-o|0-0-0)\b', normalized):
             return False
         
-        if any(phrase in text_lower for phrase in ["kingside", "short", "o-o"]):
+        # Kingside patterns (including "king side" with space!)
+        if re.search(r'\b(kingside|king\s+side|short|o-o|0-0)\b', normalized):
             return True
         
-        # Directional indicators (depend on player color)
-        if "left" in text_lower:
-            # White's left = queenside, Black's left = kingside
+        # Directional
+        if re.search(r'\bleft\b', normalized):
             return self.player_color == chess.BLACK
         
-        if "right" in text_lower:
-            # White's right = kingside, Black's right = queenside
+        if re.search(r'\bright\b', normalized):
             return self.player_color == chess.WHITE
         
         # Ambiguous/unclear

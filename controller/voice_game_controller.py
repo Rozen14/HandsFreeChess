@@ -79,6 +79,7 @@ class GameController:
         """"""        
         parsed = self.converter.to_uci(text)
         
+        # TODO: When a move is repeated it defaults to this...
         if parsed.result == MoveParseResult.NOT_UNDERSTOOD:
             self.tts.speak("I didn't catch that. Please repeat.")
             return True
@@ -134,7 +135,7 @@ class GameController:
         
         """
         castle_result = self.game.parse_castling_intent(text)
-        
+
         if castle_result.result == MoveParseResult.INVALID or castle_result.result == MoveParseResult.NOT_UNDERSTOOD: 
             self.tts.speak("Castling is not legal in this position.")
             return True
@@ -153,6 +154,23 @@ class GameController:
             announcement = f"Castled {side}" 
             self.tts.speak(announcement)
             self.last_announcement = announcement
+            
+            # Visualize board
+            if self.board_view and self.opponent_type != "online":
+                self.board_view.render()
+            
+            # Check for check
+            if self.game.board.is_check():
+                self.tts.speak("Check!")
+                
+            # Check for game over
+            if self.game.is_game_over():
+                outcome = self.game.board.outcome()
+                result = outcome.result() # TODO: If game was over from a castle, means checkmate...                
+                self.end_game(result, )
+                return False
+            
+            return self.handle_opponent_turn()  
         else:
             self.tts.speak("Cannot castle in this position.")
         
