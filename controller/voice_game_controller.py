@@ -14,13 +14,13 @@ class GameController:
     and user interactions. It manages disambiguation, game actions, and announcements.
     """
     
-    def __init__(self, game, tts, board_view = None, opponent_type = "human"):
-        
+    def __init__(self, game, tts, board_view = None, opponent_type = "human", verbose: bool = False):
         self.game = game
         self.tts = tts
         self.announcer = ga.MoveAnnouncer()
         self.intent_classifier = ic.IntentClassifier()
         self.converter = uc.UCIConverter(self.game.board)
+        self.verbose = verbose
         
         # State management
         self.pending_move = None
@@ -149,7 +149,8 @@ class GameController:
         # Execute castling
         success, error = self.game.play_move(castle_result.uci)
         
-        if success:            
+        if success:    
+            # TODO: Add which side...        
             side = ""   
             announcement = f"Castled {side}" 
             self.tts.speak(announcement)
@@ -259,7 +260,8 @@ class GameController:
             False if game ended, True otherwise
         """
         # TODO: Flow takes too long between announcing player's move and saying this...
-        self.tts.speak("Waiting for opponent.")                
+        if self.verbose:
+            self.tts.speak("Waiting for opponent.")                
         
         # 1. Get opponent move
         if self.opponent_type != "human":

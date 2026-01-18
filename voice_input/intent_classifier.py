@@ -1,4 +1,5 @@
 from sentence_transformers import SentenceTransformer, util
+from voice_input import stt_postprocessor as sttp
 # TODO: Add missing intents such as time, am I in check (?), 
 # current board position (?), others...
 # TODO: Maybe add more colloquial examples so it can understand slang (?)
@@ -158,71 +159,12 @@ INTENT_PATTERNS = {
     # ],
 }
 
-# Phonetic mapping for common STT errors
-PHONETIC_CORRECTIONS = {
-    # Pieces
-    "night": "knight",
-    "nite": "knight",
-    "nights": "knights",
-    
-    # Files (letters)
-    "see": "c",
-    "sea": "c",
-    "be": "b",
-    "bee": "b",
-    "dee": "d",
-    "ee": "e",
-    "ef": "f",
-    "gee": "g",
-    "aitch": "h",
-    
-    # Castling
-    "passel": "castle",
-    "cassel": "castle",
-    "cassle": "castle",
-    "kassel": "castle",
-    "kassle": "castle",
-    "pastel": "castle",
-    "pascal": "castle",
-    "castile": "castle",
-    
-    # Directions
-    "two": "to",
-    "too": "to",
-    "so": "to",
-    "on to": "onto",
-    "onto": "to",
-    
-    # Common words
-    "the": "",  # Remove articles
-    "a": "",
-    "an": "",
-}
-
 def preprocess_text(text: str) -> str:
     """
-    Preprocess text to correct common STT errors.
-    
-    Args:
-        text: Raw STT output
-    
-    Returns:
-        Corrected text
+    Preprocess text before intent classification.
     """
-    text_lower = text.lower().strip()
-    
-    # Apply phonetic corrections
-    words = text_lower.split()
-    corrected_words = []
-    
-    for word in words:
-        # Check if word needs correction
-        corrected = PHONETIC_CORRECTIONS.get(word, word)
-        if corrected:
-            corrected_words.append(corrected)
-    
-    return " ".join(corrected_words)
-    
+    return sttp.correct_stt_input(text, verbose=True)
+
 class IntentClassifier:
     def __init__(self) -> None:
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
