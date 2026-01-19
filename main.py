@@ -1,72 +1,36 @@
-from chess_rules import game_interface as gi
-from voice_input import speech_to_text as stt
-from voice_output.text_to_speech import TextToSpeech
-from controller import voice_game_controller as vgc
-from utils.environment import setup_ffmpeg
-from utils.audio_setup import setup_microphone 
-from app.board_view import SimpleBoardVisualizer
-import time
-import threading
+"""
+Voice Chess Interface - Main Entry Point
+
+Provides a simple menu for selecting game modes:
+- Local game (manual opponent input for testing)
+- Stockfish game (play against chess engine)
+"""
+
+from utils.game_modes import run_local_game, run_stockfish_game
 
 # TODO: Remove prints for proper logging...
 # TODO: Migrate main to app/ when implementing minimal UI...
 
-
 def main():
-    """Main application entry point."""
-    setup_ffmpeg()
-    mic_index = setup_microphone()
+    """Main application entry point with mode selection."""
+    print("=" * 60)
+    print("VOICE CHESS INTERFACE")
+    print("=" * 60)
+    print("\nSelect game mode:\n")
+    print("1. Local game (manual opponent input)")
+    print("2. Play vs Stockfish")
+    print()
     
-    # Initialize speech recognizer
-    recognizer = stt.SpeechRecognizer(
-        mic_index=mic_index,
-        phrase_time_limit=4
-    )
+    choice = input("Choose mode (1 or 2): ").strip()
     
-    # Initialize text to speech
-    tts = TextToSpeech()
-    
-    # Initialize game
-    game = gi.GameState()
-    # TODO: finish initialization of game...
-    
-    # Initialize visualizer
-    board_view = SimpleBoardVisualizer()
-    
-    # Initialize controller
-    controller = vgc.GameController(
-        game, 
-        tts, 
-        board_view=board_view,
-    
-    ) 
-    
-    print("\nVoice Chess Interface Started")
-    print("Say 'stop' to exit\n") # TODO: Implement exit
-    
-    # STT thread
-    stt_thread = threading.Thread(
-        target=recognizer.listen_loop,
-        kwargs={"callback": controller.handle_speech},
-        daemon = True
-    )
-    stt_thread.start()
-    
-    # Start APP LOOP
-    # app = AppLoop(controller, board_view)
-    
-    try:
-        # app.run()
-        while True:
-            time.sleep(0.1)
-        
-    except KeyboardInterrupt:
-        print("\nStopping...")
-    finally:
-        # app.stop()
-        recognizer.cleanup()
-        print("Goodbye!")
+    if choice == "1":
+        run_local_game()
+    elif choice == "2":
+        run_stockfish_game()
+    else:
+        print("Invalid choice. Exiting.")
 
-        
+
 if __name__ == "__main__":
     main()
+

@@ -9,6 +9,8 @@ import soundfile as sf
 from typing import Optional
 from pathlib import Path
 import hashlib
+
+from utils.audio_state import AudioStateManager, SpeakingContext
 # TODO: Remove all prints for proper logging
 
 class TextToSpeech:
@@ -17,11 +19,13 @@ class TextToSpeech:
         voice: str = "en-US-GuyNeural",
         rate: str = "+20%",
         volume: str = "+0%",
-        cache_dir: Optional[str] = None
+        cache_dir: Optional[str] = None,
+        audio_state: Optional[AudioStateManager] = None
     ):
         self.voice = voice
         self.rate = rate
         self.volume = volume
+        self.audio_state = audio_state
 
         # Set up cache dictionary
         if cache_dir is None:
@@ -115,35 +119,46 @@ class TextToSpeech:
         """
         Speak text, using cache if available.
         """
-        cache_path = self._get_cache_path(text)
+        # Use context manager to coordinate with STT
+        context = SpeakingContext(self.audio_state) if self.audio_state else None
         
-        # If cached, use the cached file
-        if cache_path.exists():
-            try:
+        try:
+            if context:
+                context.__enter__()
+            
+            cache_path = self._get_cache_path(text)
+            
+            # If cached, use the cached file
+            if cache_path.exists():
+                try:
+                    data, samplerate = sf.read(str(cache_path), dtype="float32")
+                    sd.play(data, samplerate)
+                    sd.wait()
+                    return
+                except Exception as e:
+                    print(f"Cache read failed, regenerating: {e}")
+                    # Fall through to generation
+            
+            # Generate and cache for future use
+            try: 
+                communicate = edge_tts.communicate(
+                    text=text,
+                    voice=self.voice,
+                    rate=self.rate,
+                    volume=self.volume,
+                )
+                await communicate.save(str(cache_path))
+                
                 data, samplerate = sf.read(str(cache_path), dtype="float32")
                 sd.play(data, samplerate)
                 sd.wait()
-                return
-            except Exception as e:
-                print(f"Cache read failed, regenerating: {e}")
-                # Fall through to generation
-        
-        # Generate and cache for future use
-        try: 
-            communicate = edge_tts.communicate(
-                text=text,
-                voice=self.voice,
-                rate=self.rate,
-                volume=self.volume,
-            )
-            await communicate.save(str(cache_path))
             
-            data, samplerate = sf.read(str(cache_path), dtype="float32")
-            sd.play(data, samplerate)
-            sd.wait()
+            except Exception as e:
+                print(f"TTS failed for '{text}': {e}")
         
-        except Exception as e:
-            print(f"TTS failed for '{text}': {e}")
+        finally:
+            if context:
+                context.__exit__(None, None, None)
 
     def speak(self, text: str):
         if text:

@@ -2,7 +2,10 @@ from faster_whisper import WhisperModel
 import speech_recognition as sr
 import os
 from typing import Optional, Callable
+import contextlib
 import logging # TODO: Remove prints for proper logging 
+
+from utils.audio_state import AudioStateManager, ListeningContext
 # TODO: add interface for microphone selection
 
 
@@ -97,11 +100,13 @@ class SpeechRecognizer:
         device: str = "cpu",
         compute_type: str = "int8",
         phrase_time_limit: float = 4,
-        # vad_min_silence: int = 250
+        # vad_min_silence: int = 250,
+        audio_state: Optional[AudioStateManager] = None
     ):
         self.mic_index = mic_index
         self.phrase_time_limit = phrase_time_limit
         # self.vad_min_silence = vad_min_silence
+        self.audio_state = audio_state
         
         # Initialize microphone
         try: 
@@ -141,37 +146,39 @@ class SpeechRecognizer:
         
         Returns:
             Transcribed text or None if no speech detected
-        """
+        """        
         # TODO: Adjust listening time or change to other method...
-        try:
-            with self.mic as source:
-                print("Listening...")
-                audio = self.recognizer.listen(
-                    source,
-                    timeout=None,               # wait for speech
-                    phrase_time_limit=self.phrase_time_limit      # max length of command
+        context = ListeningContext(self.audio_state) if self.audio_state else contextlib.nullcontext()
+        with context:
+            try:
+                with self.mic as source:
+                    print("Listening...")
+                    audio = self.recognizer.listen(
+                        source,
+                        timeout=None,               # wait for speech
+                        phrase_time_limit=self.phrase_time_limit      # max length of command
+                    )
+
+                wav_data = audio.get_wav_data()
+                with open("temp.wav", "wb") as f:
+                    f.write(wav_data)
+
+                segments, info = self.model.transcribe(
+                    "temp.wav",
+                    vad_filter=True,
+                    vad_parameters={
+                        # "min_silence_duration_ms": 300
+                    },
+                    beam_size=1,
+                    best_of=1
                 )
 
-            wav_data = audio.get_wav_data()
-            with open("temp.wav", "wb") as f:
-                f.write(wav_data)
+                text = "".join(segment.text for segment in segments).strip()
+                return text if text else None
 
-            segments, info = self.model.transcribe(
-                "temp.wav",
-                vad_filter=True,
-                vad_parameters={
-                    # "min_silence_duration_ms": 300
-                },
-                beam_size=1,
-                best_of=1
-            )
-
-            text = "".join(segment.text for segment in segments).strip()
-            return text if text else None
-
-        except Exception as e:
-            print(f"Speech recognition error: {e}")
-            return None
+            except Exception as e:
+                print(f"Speech recognition error: {e}")
+                return None
         
     def listen_loop(self, callback: Optional[Callable[[str], None]] = None):
         """
