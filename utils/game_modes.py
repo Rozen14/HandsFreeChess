@@ -144,3 +144,8 @@ def run_stockfish_game():
         recognizer.cleanup()
         tts.shutdown()
         print("\nGoodbye!")
+        
+
+def run_online_game():
+    # TODO: Implement
+    pass
