@@ -17,7 +17,6 @@ class AudioStateManager:
     
     Ensures that:
     - STT doesn't listen while TTS is speaking
-    - TTS can interrupt STT if needed
     - Proper sequencing of audio operations
     """
     
@@ -146,7 +145,8 @@ class SpeakingContext:
     def __enter__(self)    :
         if self.wait_for_idle:
             # Wait for any existing speech/listening to finish
-            self.audio_state.wait_until_idle(timeout=5.0)
+            if not self.audio_state.wait_until_idle(timeout=5.0):
+                print("Warning: audio not idle, skipping TTS")
         
         self.audio_state.set_mode(AudioMode.SPEAKING)
         return self

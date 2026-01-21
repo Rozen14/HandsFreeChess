@@ -14,6 +14,7 @@ import time
 
 from utils.audio_state import AudioStateManager, SpeakingContext
 # TODO: Remove all prints for proper logging
+# TODO: Migrate from .wav into in-memory audio buffers
 
 class TextToSpeech:
     def __init__(

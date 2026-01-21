@@ -4,9 +4,11 @@ import os
 from typing import Optional, Callable
 import contextlib
 import logging # TODO: Remove prints for proper logging 
+import time
 
 from utils.audio_state import AudioStateManager, ListeningContext
 # TODO: add interface for microphone selection
+# TODO: Migrate from .wav into in-memory audio buffers
 
 
 def list_microphones():
@@ -152,7 +154,6 @@ class SpeechRecognizer:
         with context:
             # Small delay after TTS finishes to let speakers settle
             if self.audio_state:
-                import time
                 time.sleep(0.3) # 300ms grace period after TTS stops
             
             try:
@@ -197,6 +198,7 @@ class SpeechRecognizer:
             text = self.listen_once()
             
             if not text:
+                time.sleep(0.05)
                 continue
             
             if callback:
