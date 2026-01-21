@@ -151,9 +151,9 @@ class SpeechRecognizer:
         context = ListeningContext(self.audio_state) if self.audio_state else contextlib.nullcontext()
         with context:
             # Small delay after TTS finishes to let speakers settle
-            # if self.audio_state and self.audio_state.is_idle():
-            #     import time
-            #     time.sleep(0.3) # 300ms grace period after TTS stops
+            if self.audio_state:
+                import time
+                time.sleep(0.3) # 300ms grace period after TTS stops
             
             try:
                 with self.mic as source:

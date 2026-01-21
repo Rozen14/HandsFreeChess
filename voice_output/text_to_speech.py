@@ -10,7 +10,7 @@ from typing import Optional
 from pathlib import Path
 import hashlib
 import numpy as np
-import re
+import time
 
 from utils.audio_state import AudioStateManager, SpeakingContext
 # TODO: Remove all prints for proper logging
@@ -19,15 +19,17 @@ class TextToSpeech:
     def __init__(
         self,
         voice: str = "en-US-GuyNeural",
-        rate: str = "+25%",
+        rate: str = "+30%",
         volume: str = "+0%",
         cache_dir: Optional[str] = None,
-        audio_state: Optional[AudioStateManager] = None
+        audio_state: Optional[AudioStateManager] = None,
+        enable_chunking: bool = False 
     ):
         self.voice = voice
         self.rate = rate
         self.volume = volume
         self.audio_state = audio_state
+        self.enable_chunking = enable_chunking
 
         # Set up cache dictionary
         if cache_dir is None:
@@ -37,6 +39,10 @@ class TextToSpeech:
         
         # Memory cache for even faster playback
         self.memory_cache: dict[str, tuple[np.ndarray, int]] = {}
+        self._cache_lock = threading.Lock()  # ADD THIS
+        
+        # Standard sample rate for consistency
+        self.target_sample_rate = 24000
         
         self.queue: queue.Queue[str | None] = queue.Queue()
         self.thread = threading.Thread(
@@ -47,7 +53,7 @@ class TextToSpeech:
         
         # Pre-cache common phrases on startup
         self._precache_common_phrases()
-
+        
     def _get_cache_path(self, text: str) -> Path:
         """
         Generate a cache file path based on text and voice settings.
@@ -76,49 +82,32 @@ class TextToSpeech:
             "Opponent played an invalid move.",
             "Timed out waiting for opponent.",
             
+            # Most common full phrases
+            "Pawn to e4", "Pawn to e5", "Pawn to d4", "Pawn to d5",
+            "Pawn to c4", "Pawn to c5", "Knight to f3", "Knight to c6",
+            "Bishop to c4", "Bishop to g5", "Knight to f6", "Bishop to e7",
+            
             # Chunking prefixes (for fast start)
             "White", "Black",
             "White played", "Black played",
             
-            # Common move components
-            "Pawn", "Knight", "Bishop", "Rook", "Queen", "King",
-            "takes", "to", "and promotes to",
-            "Castled kingside", "Castled queenside",
-            
-            # Common squares - all 64 squares for completeness
-            *[f"{file}{rank}" for file in "abcdefgh" for rank in "12345678"],
-            
-            # Most common opening moves (pre-generate full phrases)
-            "Pawn to e4", "Pawn to e5", "Pawn to d4", "Pawn to d5",
-            "Pawn to c4", "Pawn to c5", "Pawn to f4", "Pawn to f5",
-            "Knight to f3", "Knight to c6", "Knight to f6", "Knight to c3",
-            "Bishop to c4", "Bishop to g5", "Bishop to e7", "Bishop to c5",
-            
-            # Common captures
-            "Pawn takes e5", "Pawn takes d5", "Knight takes e5",
+            # Common opponent moves
+            "Black pawn to e5", "Black pawn to c5", "Black knight to f6",
+            "Black pawn to d5", "Black knight to c6", "Black bishop to e7",
+            "White pawn to e4", "White pawn to d4", "White knight to f3",
+            "White bishop to c4", "White knight to c3",
             
             # Game endings
             "Checkmate!", "Stalemate.", "The game is a draw.",
             "Game over.",
         ]
         
-        # Generate common move patterns dynamically
-        pieces = ["Pawn", "Knight", "Bishop", "Rook", "Queen"]
-        common_squares = ["e4", "e5", "d4", "d5", "c4", "c5", "f3", "c6", 
-                         "f6", "c3", "g3", "b5", "a6", "h3"]
-        
-        for piece in pieces:
-            for square in common_squares:
-                common_phrases.append(f"{piece} to {square}")
-                common_phrases.append(f"{piece} takes {square}")
-        
         def generate_and_load():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             
             print("Pre-caching TTS phrases...")
-            cached_count = 0
-            loaded_count = 0
+            success_count = 0
             
             for phrase in common_phrases:
                 cache_path = self._get_cache_path(phrase)
@@ -133,20 +122,47 @@ class TextToSpeech:
                             volume=self.volume
                         )
                         loop.run_until_complete(communicate.save(str(cache_path)))
-                        cached_count += 1
+                        # Small delay to avoid overwhemling edge-tts
+                        time.sleep(0.1)
                     except Exception as e:
                         print(f"Failed to cache '{phrase}': {e}")
                         continue
                 
-                # Load into memory for instant playback
+                # Validate and load into memory                
                 try:
+                    if cache_path.stat().st_size < 1000: # File too small, likely corrupted
+                        print(f"Corrupted cache for '{phrase}', regenerating...")
+                        cache_path.unlink()
+                        continue
+                    
                     data, sr = sf.read(str(cache_path), dtype="float32")
+                    
+                    # Resample if needed for consistency
+                    if sr != self.target_sample_rate:
+                        import scipy.signal
+                        num_samples = int(len(data) * self.target_sample_rate / sr)
+                        data = scipy.signal.resample(data, num_samples)
+                        sr = self.target_sample_rate
+                    
+                    # Normalize audio to prevent clipping
+                    if len(data) > 0:
+                        max_val = np.abs(data).max()
+                        if max_val > 0:
+                            data = data / max_val * 0.95
+                        
                     self.memory_cache[phrase] = (data, sr)
-                    loaded_count += 1
+                    success_count += 1
+                
                 except Exception as e:
-                    print(f"Failed to load '{phrase}' into memory: {e}")
-            
-            print(f"Loaded {len(self.memory_cache)} phrases into memory cache")
+                    print(f"Failed to load '{phrase}': {e}")
+                    # Delete corrupted cache file
+                    if cache_path.exists():
+                        try:
+                            cache_path.unlink()
+                        except:
+                            pass
+                    
+            print(f"TTS cache ready: {success_count}/{len(common_phrases)} phrases loaded")
         
         threading.Thread(target=generate_and_load, daemon=True).start()
     
@@ -159,89 +175,49 @@ class TextToSpeech:
             if text is None:
                 break
 
-            await self._speak_once(text)
+            await self._speak_once_async(text)
             self.queue.task_done()
-
-    def _chunk_text(self, text: str) -> list[str]:
-        """
-        Split text into chunks for faster perceived response.
-        
-        Examples:
-            "Black played pawn to e5" -> ["Black played", "pawn to e5"]
-            "White knight takes e4" -> ["White", "knight takes e4"]
-            "Pawn to e4" -> ["Pawn to e4"]  (already short, no split)
-        """
-        # Don't chunk if entire phrase is in memory cache (instant anyway)
-        if text in self.memory_cache:
-            return [text]
-        
-        #  Don't chunk very short phrases
-        if len(text) < 15:
-            return [text]
-        
-        # Pattern: "White/Black played <move>"
-        match = re.match(r'^((?:White|Black) played)\s+(.+)$', text, re.IGNORECASE)
-        if match:
-            prefix = match.group(1)
-            rest = match.group(2)
-            # Only chunk if prefix is cached (for instant start)
-            if prefix in self.memory_cache:
-                return [prefix, rest]
-        
-        # Pattern: "White/Black <move>"
-        match = re.match(r'^(White|Black)\s+(.+)$', text, re.IGNORECASE)
-        if match:
-            prefix = match.group(1)
-            rest = match.group(2)
-            # Only chunk if prefix is cached
-            if prefix in self.memory_cache:
-                return [prefix, rest]
-        
-        # Pattern: "<Piece> takes <square>"
-        match = re.match(r'^(\w+)\s+(takes\s+.+)$', text, re.IGNORECASE)
-        if match:
-            piece = match.group(1)
-            rest = match.group(2)
-            # Only chunk if piece is cached
-            if piece in self.memory_cache:
-                return [piece, rest]
-        
-        # Pattern: "<Piece> to <square>"
-        match = re.match(r'^(\w+)\s+(to\s+.+)$', text, re.IGNORECASE)
-        if match:
-            piece = match.group(1)
-            rest = match.group(2)
-            # Only chunk if piece is cached
-            if piece in self.memory_cache:
-                return [piece, rest]
-        
-        # Default: no chunking
-        return [text]
 
     async def _speak_chunk(self, chunk: str) -> tuple[np.ndarray, int]:
         """
         Get audio data for a chunk (from memory, cache, or generate).
         Returns (audio_data, sample_rate)
         """
-        # 1. Check memory cache (INSTANT - <10ms)
-        if chunk in self.memory_cache:
-            return self.memory_cache[chunk]
+        # 1. Check memory cache (INSTANT)
+        with self._cache_lock:
+            if chunk in self.memory_cache:
+                return self.memory_cache[chunk]
         
         cache_path = self._get_cache_path(chunk)
         
-        # 2. Check file cache (FAST - ~50ms)
+        # 2. Check file cache 
         if cache_path.exists():
             try:
-                data, sr = sf.read(str(cache_path), dtype="float32")
-                # Cache commonly used phrases in memory for next time
-                if len(chunk) < 30: # Only cache short phrases in memory
-                    self.memory_cache[chunk] = (data, sr)
+                # Validate file size
+                if cache_path.stat().st_size < 1000:
+                    cache_path.unlink()
+                    raise Exception("Corrupted cache file")
                 
+                data, sr = sf.read(str(cache_path), dtype="float32")
+                
+                # Resample if needed
+                if sr != self.target_sample_rate:
+                    import scipy.signal
+                    num_samples = int(len(data) * self.target_sample_rate / sr)
+                    data = scipy.signal.resample(data, num_samples)
+                    sr = self.target_sample_rate
+                
+                # Normalize
+                if len(data) > 0:
+                    max_val = np.abs(data).max()
+                    if max_val > 0:
+                        data = data / max_val * 0.95
+
                 return (data, sr)
             except Exception as e:
                 print(f"Cache read failed for '{chunk}': {e}")
         
-        # 3. Generate (SLOW - ~500ms+)
+        # 3. Generate 
         try:
             communicate = edge_tts.Communicate(
                 text=chunk,
@@ -251,72 +227,82 @@ class TextToSpeech:
             )
             await communicate.save(str(cache_path))
             
+            # Validate generated file
+            if cache_path.stat().st_size < 1000:
+                raise Exception("Generated file too small")
+            
             data, sr = sf.read(str(cache_path), dtype="float32")
-            # Auto-cache short generated phrases
-            if len(chunk) < 30:
-                self.memory_cache[chunk] = (data, sr)            
+            
+            # Resample and normalize
+            if sr != self.target_sample_rate:
+                import scipy.signal
+                num_samples = int(len(data) * self.target_sample_rate / sr)
+                data = scipy.signal.resample(data, num_samples)
+                sr = self.target_sample_rate
+            
+            if len(data) > 0:
+                max_val = np.abs(data).max()
+                if max_val > 0:
+                    data = data / max_val * 0.95
+            
             return (data, sr)
         
         except Exception as e:
             print(f"TTS generation failed for '{chunk}': {e}")
-            return (np.array([]), 0)        
+            return (np.array([]), 0)    
         
-    async def _speak_once(self, text: str):
+    def _play_audio_sync(self, data: np.ndarray, sr: int):
         """
-        Speak text with chunking for faster percieved response.
+        Play audio synchronously with proper coordination
         """
-        # Use context manager to coordinate with STT
         context = SpeakingContext(self.audio_state) if self.audio_state else None
         
         try:
             if context:
                 context.__enter__()
-            
-            # Split into chunks
-            chunks = self._chunk_text(text)
-            
-            # If only one chunk, process normally
-            if len(chunks) == 1:
-                data, sr = await self._speak_chunk(chunks[0])
-                if len(data) > 0:
-                    sd.play(data, sr)
-                    sd.wait()
+                
+            if len(data) == 0:
                 return
             
-            # Multi-chunk: overlap generation and playback
-            # Start playing first chunk immediately while generating second
-            first_data, first_sr = await self._speak_chunk(chunks[0])
-            
-            if len(first_data) == 0:
-                return
-            
-            # Start playing first chunk
-            sd.play(first_data, first_sr)
-            
-            # Generate remaining chunks while first plays
-            remaining_tasks = [self._speak_chunk(chunk) for chunk in chunks[1:]]
-            remaining_chunks = await asyncio.gather(*remaining_tasks)
-            
-            # Wait for first chunk to finish
+            sd.play(data, sr)
             sd.wait()
-            
-            # Play remaining chunks
-            for data, sr in remaining_chunks:
-                if len(data) > 0:
-                    sd.play(data, sr)
-                    sd.wait()
-        
-        except Exception as e:
-            print(f"TTS failed for '{text}': {e}")
+            time.sleep(0.4)
         
         finally:
             if context:
-                context.__exit__(None, None, None)                 
-
+                context.__exit__(None, None, None)
+    
+    async def _speak_once_async(self, text: str):
+        """
+        Async version for queue worker.
+        """
+        data, sr = await self._speak_chunk(text)
+        self._play_audio_sync(data, sr)
+        
     def speak(self, text: str):
-        if text:
-            self.queue.put(text)
-
+        """
+        Speak text.
+        FAST PATH: Cached phrases play instantly.
+        SLOW PATH: Uncached phrases go through queue.
+        """
+        if not text:
+            return
+        
+        # FAST PATH: Check memory cache
+        with self._cache_lock:
+            if text in self.memory_cache:
+                data, sr = self.memory_cache[text]
+                # Play in separate thread (non-blocking, instant)
+                threading.Thread(
+                    target=self._play_audio_sync,
+                    args=(data, sr),
+                    daemon=True
+                ).start()
+                return
+        
+        # SLOW PATH: Queue for generation
+        self.queue.put(text)         
+        
     def shutdown(self):
         self.queue.put(None)
         self.thread.join(timeout=2)
