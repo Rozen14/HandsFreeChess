@@ -11,6 +11,7 @@ from pathlib import Path
 import hashlib
 import numpy as np
 import time
+from collections import OrderedDict
 
 from utils.audio_state import AudioStateManager, SpeakingContext
 # TODO: Remove all prints for proper logging
@@ -39,7 +40,9 @@ class TextToSpeech:
         self.cache_dir.mkdir(exist_ok=True)
         
         # Memory cache for even faster playback
+        self.max_cache_size = 50
         self.memory_cache: dict[str, tuple[np.ndarray, int]] = {}
+        self.memory_cache = OrderedDict() # LRU eviction
         self._cache_lock = threading.Lock()  # ADD THIS
         
         # Standard sample rate for consistency
@@ -103,6 +106,11 @@ class TextToSpeech:
             "Game over.",
         ]
         
+        def _add_to_cache(self, phrase: str, data: tuple):
+            if len(self.memory_cache) >= self.max_cache_size:
+                self.memory_cache.popitem(last=False)  # Remove oldest
+            self.memory_cache[phrase] = data
+        
         def generate_and_load():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -151,7 +159,7 @@ class TextToSpeech:
                         if max_val > 0:
                             data = data / max_val * 0.95
                         
-                    self.memory_cache[phrase] = (data, sr)
+                    _add_to_cache(phrase, (data, sr))
                     success_count += 1
                 
                 except Exception as e:

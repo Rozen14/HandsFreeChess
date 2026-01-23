@@ -95,13 +95,14 @@ class GameController:
         uci = parsed.uci
         print(f"Parsed: {uci}")
         
-        # Store board state before move
-        board_before_move = self.game.board.copy()        
+        # Lazy copy
+        board_before_move = None   
         
         # Validate and execute move
         success, error = self.game.play_move(uci)
         
         if success:             
+            board_before_move = self.game.board.copy(stack=False)  # shallow copy
             announcement = self.announcer.announce_move_from_board(uci, board_before_move)
             self.tts.speak(announcement)
             self.last_announcement = announcement

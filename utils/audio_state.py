@@ -146,6 +146,7 @@ class SpeakingContext:
         if self.wait_for_idle:
             # Wait for any existing speech/listening to finish
             if not self.audio_state.wait_until_idle(timeout=5.0):
+                # TODO: Check...
                 print("Warning: audio not idle, skipping TTS")
         
         self.audio_state.set_mode(AudioMode.SPEAKING)

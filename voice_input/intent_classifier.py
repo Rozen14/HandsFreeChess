@@ -183,16 +183,15 @@ class IntentClassifier:
         
         text_emb = self.model.encode(corrected_text, convert_to_tensor=True)
 
-        best_intent = None
-        best_score = -1
-
+        # Use vectorized similarity for all intents at once
+        all_scores = []
         for intent, examples_emb in self.intent_embeddings.items():
             scores = util.cos_sim(text_emb, examples_emb)
-            score = scores.max().item()
+            all_scores.append((intent, scores.max().item()))
 
-            if score > best_score:
-                best_score = score
-                best_intent = intent
+        # Sort once
+        all_scores.sort(key=lambda x: x[1], reverse=True)
+        best_intent, best_score = all_scores[0]
         
         # Log confidence for debugging 
         # if best_intent and best_score > threshold:

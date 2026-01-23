@@ -169,119 +169,6 @@ PATTERN_CORRECTIONS = [
 # CORRECTION FUNCTIONS
 # ============================================================================
 
-def apply_phonetic_corrections(text: str) -> str:
-    """
-    Layer 1: Apply phonetic corrections word-by-word.
-    
-    Example:
-        "wean to d4" → "queen to d4"
-        "night to see three" → "knight to c3"
-    """
-    words = text.lower().split()
-    corrected = []
-    
-    i = 0
-    while i < len(words):
-        word = words[i]
-        
-        # Check for multi-word patterns first
-        if i + 1 < len(words):
-            two_words = f"{word} {words[i+1]}"
-            if two_words in PHONETIC_CORRECTIONS:
-                corrected.append(PHONETIC_CORRECTIONS[two_words])
-                i += 2
-                continue
-        
-        # Single word correction
-        corrected_word = PHONETIC_CORRECTIONS.get(word, word)
-        corrected.append(corrected_word)
-        i += 1
-    
-    return " ".join(corrected)
-
-
-def apply_pattern_corrections(text: str) -> str:
-    """
-    Layer 2: Apply pattern-based corrections.
-    
-    Example:
-        "9, set f3" → "knight f3"
-        "pontase h3" → "pawn takes h3"
-    """
-    corrected = text
-    
-    for pattern, replacement, description in PATTERN_CORRECTIONS:
-        if re.search(pattern, corrected, re.IGNORECASE):
-            corrected = re.sub(pattern, replacement, corrected, flags=re.IGNORECASE)
-            print(f"  Pattern fix: {description}")
-    
-    return corrected
-
-
-def fuzzy_match_chess_words(text: str) -> str:
-    """
-    Layer 3: Fuzzy match unknown words to chess vocabulary.
-    
-    Example:
-        "knigt to e4" → "knight to e4"
-        "quene to d5" → "queen to d5"
-    """
-    words = text.split()
-    corrected = []
-    
-    for word in words:
-        # If word is already in vocabulary, keep it
-        if word in CHESS_VOCABULARY:
-            corrected.append(word)
-            continue
-        
-        # Try to find close match
-        matches = get_close_matches(word, CHESS_VOCABULARY, n=1, cutoff=0.6)
-        if matches:
-            corrected_word = matches[0]
-            if corrected_word != word:
-                print(f"  Fuzzy match: '{word}' → '{corrected_word}'")
-            corrected.append(corrected_word)
-        else:
-            # No match found, keep original
-            corrected.append(word)
-    
-    return " ".join(corrected)
-
-
-def remove_noise_words(text: str) -> str:
-    """
-    Layer 4: Remove common noise words that aren't chess-related.
-    
-    Example:
-        "the queen to d4" → "queen to d4"
-        "a knight moves to f3" → "knight to f3"
-    """
-    # Words to remove
-    noise = {'the', 'a', 'an', 'my', 'your', 'moves', 'move', 'go', 'goes'}
-    
-    words = text.split()
-    filtered = [w for w in words if w not in noise]
-    
-    return " ".join(filtered)
-
-
-def normalize_spacing(text: str) -> str:
-    """
-    Layer 5: Normalize spacing around squares.
-    
-    Example:
-        "c 3" → "c3"
-        "see three" → "c3"
-    """
-    # Fix spaced squares like "c 3" → "c3"
-    text = re.sub(r'\b([a-h])\s+([1-8])\b', r'\1\2', text)
-    
-    # Fix phonetic squares like "see three" (already corrected to "c 3")
-    # This is already handled by phonetic corrections
-    
-    return text
-
 def correct_stt_input(text: str, verbose: bool = True) -> str:
     """
     Apply all correction layers to STT input.
@@ -301,26 +188,37 @@ def correct_stt_input(text: str, verbose: bool = True) -> str:
         Corrected text
     """
     original = text
+    words = text.lower().split()
+    # Single pass: phonetic + pattern + fuzzy + noise removal
+    corrected = []
+    i = 0
+    while i < len(words):
+        # Check multi-word phonetics
+        if i + 1 < len(words):
+            two_words = f"{words[i]} {words[i+1]}"
+            if two_words in PHONETIC_CORRECTIONS:
+                corrected.append(PHONETIC_CORRECTIONS[two_words])
+                i += 2
+                continue
+        
+        word = words[i]
+        # Phonetic correction
+        word = PHONETIC_CORRECTIONS.get(word, word)
+        # Skip noise words
+        if word not in {'the', 'a', 'an', 'my', 'your'}:
+            # Fuzzy match if needed
+            if word not in CHESS_VOCABULARY:
+                matches = get_close_matches(word, CHESS_VOCABULARY, n=1, cutoff=0.6)
+                word = matches[0] if matches else word
+            corrected.append(word)
+        i += 1
     
-    # Layer 1: Phonetic
-    text = apply_phonetic_corrections(text)
+    text = " ".join(corrected)
+    # Apply regex patterns (only once)
+    for pattern, replacement, _ in PATTERN_CORRECTIONS:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     
-    # Layer 2: Patterns
-    text = apply_pattern_corrections(text)
-    
-    # Layer 3: Fuzzy matching
-    text = fuzzy_match_chess_words(text)
-    
-    # Layer 4: Remove noise
-    text = remove_noise_words(text)
-    
-    # Layer 5: Normalize
-    text = normalize_spacing(text)
-    
-    # Clean up extra spaces
-    text = " ".join(text.split())
-    
-    if verbose and text != original.lower().strip():
-        print(f"  STT Correction: '{original}' → '{text}'")
+    # Normalize spacing (only once)
+    text = re.sub(r'\b([a-h])\s+([1-8])\b', r'\1\2', text)
     
     return text

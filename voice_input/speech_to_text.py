@@ -5,6 +5,7 @@ from typing import Optional, Callable
 import contextlib
 import logging # TODO: Remove prints for proper logging 
 import time
+import tempfile
 
 from utils.audio_state import AudioStateManager, ListeningContext
 # TODO: add interface for microphone selection
@@ -166,19 +167,19 @@ class SpeechRecognizer:
                     )
 
                 wav_data = audio.get_wav_data()
-                with open("temp.wav", "wb") as f:
-                    f.write(wav_data)
-
-                segments, info = self.model.transcribe(
-                    "temp.wav",
-                    vad_filter=True,
-                    vad_parameters={
-                        # "min_silence_duration_ms": 300
-                    },
-                    beam_size=1,
-                    best_of=1
-                )
-
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=True) as tmp:
+                    tmp.write(wav_data)
+                    tmp.flush()
+                    segments, info = self.model.transcribe(
+                        tmp.name,                                                            
+                        vad_filter=True,
+                        vad_parameters={
+                            # "min_silence_duration_ms": 300
+                        },
+                        beam_size=1,
+                        best_of=1
+                    )
+                    
                 text = "".join(segment.text for segment in segments).strip()
                 return text if text else None
 
