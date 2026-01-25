@@ -1,7 +1,7 @@
 import chess
 import requests
 from chess_rules import move_validator as mv
-from chess_rules.move_parse_result import MoveParseResult, ParsedMove
+from chess_rules.chess_enums.move_parse_result import MoveParseResult, ParsedMove
 # TODO: (Optional) add chess variants ie. chess960 etc.
 # TODO: Refactor moves as to have relevant formatting...
 

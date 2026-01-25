@@ -11,6 +11,7 @@ from app.board_view import SimpleBoardVisualizer
 from app.app_loop import AppLoop
 from utils.environment import setup_ffmpeg
 from utils.audio_setup import setup_microphone, setup_audio_components
+from config import constants
 
 # TODO: Remove prints for proper logging
 
@@ -85,7 +86,7 @@ def run_stockfish_game():
         return
     
     skill_input = input("Stockfish skill level (0-20, default 10): ").strip()
-    skill_level = int(skill_input) if skill_input else 10
+    skill_level = int(skill_input) if skill_input else constants.DEFAULT_SKILL_LEVEL
     
     # Setup audio
     mic_index = setup_microphone()
@@ -94,7 +95,7 @@ def run_stockfish_game():
     # Initialize game components
     game = gi.GameState(player_color="white")
     board_view = SimpleBoardVisualizer()
-    stockfish = StockfishOpponent(str(stockfish_path), skill_level=skill_level, time_limit=1.0)
+    stockfish = StockfishOpponent(str(stockfish_path), skill_level=skill_level, time_limit=constants.DEFAULT_THINK_TIME)
     
     controller = vgc.GameController(
         game, 
@@ -104,7 +105,7 @@ def run_stockfish_game():
     )
     
     # Override wait_for_opponent_move to use Stockfish
-    def wait_with_stockfish(timeout=360):
+    def wait_with_stockfish(timeout=constants.TIMEOUT_STOCKFISH):
         """Get Stockfish's move."""
         print("\n[Stockfish is thinking...]")
         move = stockfish.get_move(game.board)

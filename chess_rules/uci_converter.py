@@ -1,6 +1,6 @@
 import chess
 import re
-from chess_rules.move_parse_result import ParsedMove, MoveParseResult
+from chess_rules.chess_enums.move_parse_result import ParsedMove, MoveParseResult
 
 class UCIConverter:
     """

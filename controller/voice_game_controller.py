@@ -1,6 +1,6 @@
 from voice_input import intent_classifier as ic
 from chess_rules import uci_converter as uc
-from chess_rules.move_parse_result import MoveParseResult
+from chess_rules.chess_enums.move_parse_result import MoveParseResult
 from voice_output import game_announcer as ga
 from chess import COLORS
 

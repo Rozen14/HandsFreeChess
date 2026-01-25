@@ -1,7 +1,7 @@
 import re 
 import chess 
 from typing import Optional
-from chess_rules.move_parse_result import MoveParseResult, ParsedMove
+from chess_rules.chess_enums.move_parse_result import MoveParseResult, ParsedMove
 # TODO: Finish...
 # TODO: Refactor to use UCI...
 # TODO: Maybe add variation to phrases(?)
@@ -295,3 +295,4 @@ class MoveAnnouncer:
             return
         else:
             return
+    

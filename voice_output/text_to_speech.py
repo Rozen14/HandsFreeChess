@@ -12,8 +12,9 @@ import hashlib
 import numpy as np
 import time
 from collections import OrderedDict
+from config import constants
 
-from utils.audio_state import AudioStateManager, SpeakingContext
+from utils.audio_state import AudioStateManager, AudioContext
 # TODO: Remove all prints for proper logging
 # TODO: Migrate from .wav into in-memory audio buffers
 
@@ -21,7 +22,7 @@ class TextToSpeech:
     def __init__(
         self,
         voice: str = "en-US-GuyNeural",
-        rate: str = "+30%",
+        rate: str = constants.TTS_RATE,
         volume: str = "+0%",
         cache_dir: Optional[str] = None,
         audio_state: Optional[AudioStateManager] = None,
@@ -40,7 +41,7 @@ class TextToSpeech:
         self.cache_dir.mkdir(exist_ok=True)
         
         # Memory cache for even faster playback
-        self.max_cache_size = 50
+        self.max_cache_size = constants.TTS_CACHE_SIZE
         self.memory_cache: dict[str, tuple[np.ndarray, int]] = {}
         self.memory_cache = OrderedDict() # LRU eviction
         self._cache_lock = threading.Lock()  # ADD THIS
@@ -300,14 +301,17 @@ class TextToSpeech:
         # FAST PATH: Check memory cache
         with self._cache_lock:
             if text in self.memory_cache:
-                data, sr = self.memory_cache[text]
-                # Play in separate thread (non-blocking, instant)
-                threading.Thread(
-                    target=self._play_audio_sync,
-                    args=(data, sr),
-                    daemon=True
-                ).start()
-                return
+                try:
+                    data, sr = self.memory_cache[text]
+                    # Play in separate thread (non-blocking, instant)
+                    threading.Thread(
+                        target=self._play_audio_sync,
+                        args=(data, sr),
+                        daemon=True
+                    ).start()
+                    return
+                except Exception as e:
+                    print(f"Cache playback error: {e}")
         
         # SLOW PATH: Queue for generation
         self.queue.put(text)         

@@ -1,7 +1,6 @@
 import threading
 from enum import Enum
 from typing import Optional, Callable
-import time
 # TODO: Remove prints for proper logging
 
 class AudioMode(Enum):
@@ -121,98 +120,31 @@ class AudioStateManager:
         with self._lock:
             if callback in self._callbacks:
                 self._callbacks.remove(callback)
+          
                 
-                
-class SpeakingContext:
-    """
-    Context manager for TTS operations.
-    
-    Usage:
-        with SpeakingContext(audio_state):
-            # TTS code here
-            # Mode is automatically set to SPEAKING
-        # Mode is automatically reset to IDLE when exiting
-    """
-    def __init__(self, audio_state: AudioStateManager, wait_for_idle: bool = True):
-        """
-        Args:
-            audio_state: The shared AudioStateManager
-            wait_for_idle: If True, wait for system to be idle before speaking
-        """
+class AudioContext:
+    """Unified context manager for both speaking and listening"""
+    def __init__(self, audio_state: AudioStateManager, mode: AudioMode, 
+                 wait_for_idle: bool = True):
         self.audio_state = audio_state
+        self.mode = mode
         self.wait_for_idle = wait_for_idle
-
-    def __enter__(self)    :
+    
+    def __enter__(self):
         if self.wait_for_idle:
-            # Wait for any existing speech/listening to finish
-            if not self.audio_state.wait_until_idle(timeout=5.0):
-                # TODO: Check...
-                print("Warning: audio not idle, skipping TTS")
+            if self.mode == AudioMode.SPEAKING:
+                self.audio_state.wait_until_idle(timeout=5.0)
+            else:  # LISTENING
+                self.audio_state.wait_until_not_speaking(timeout=10.0)
         
-        self.audio_state.set_mode(AudioMode.SPEAKING)
+        self.audio_state.set_mode(self.mode)
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """
-        Clean up when exiting the context.
-        
-        Args:
-            exc_type: Exception type if an exception occurred, None otherwise
-            exc_val: Exception value if an exception occurred, None otherwise
-            exc_tb: Exception traceback if an exception occurred, None otherwise
-            
-        Returns:
-            False to propagate any exception that occurred
-        """
-        # Always reset to IDLE, even if an exception occurred
         self.audio_state.set_mode(AudioMode.IDLE)
-        # Return False means: don't suppress exceptions
-        # If we returned True, exceptions would be silently caught
         return False
 
-        
-class ListeningContext: 
-    """
-    Context manager for STT operations.
-    
-    Usage:
-        with ListeningContext(audio_state):
-            # STT code here
-            # Mode is automatically set to LISTENING (after waiting for TTS)
-        # Mode is automatically reset to IDLE when exiting
-    """
-    def __init__(self, audio_state: AudioStateManager, wait_for_speech: bool = True):
-        """
-        Args:
-            audio_state: The shared AudioStateManager
-            wait_for_speech: If True, wait for TTS to finish before listening
-        """
-        self.audio_state = audio_state
-        self.wait_for_speech = wait_for_speech
-
-    def __enter__(self)    :
-        if self.wait_for_speech:
-            # Always wait for TTS to finish before listening
-            if not self.audio_state.wait_until_not_speaking(timeout=10.0):
-                print("Warning: Timeout waiting for TTS to finish")
-        
-        self.audio_state.set_mode(AudioMode.LISTENING)
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """
-        Clean up when exiting the context.
-        
-        Args:
-            exc_type: Exception type if an exception occurred, None otherwise
-            exc_val: Exception value if an exception occurred, None otherwise
-            exc_tb: Exception traceback if an exception occurred, None otherwise
-            
-        Returns:
-            False to propagate any exception that occurred
-        """        
-        # Always reset to IDLE, even if an exception occurred
-        self.audio_state.set_mode(AudioMode.IDLE)
-        
-        # Return False means: don't suppress exceptions
-        return False
+# Usage:
+# with AudioContext(state, AudioMode.SPEAKING):
+#     speak(text)
+# TODO: Implement 

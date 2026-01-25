@@ -2,12 +2,13 @@ import pygame
 import chess
 import os
 import threading
+from config import constants
 
-SQUARE_SIZE = 80
-BOARD_SIZE = 8 * SQUARE_SIZE
+SQUARE_SIZE = constants.BOARD_SQUARE_SIZE
+BOARD_SIZE = constants.BOARD_SIZE
 
-LIGHT = (240, 217, 181)
-DARK = (181, 136, 99)
+LIGHT = constants.LIGHT_SQUARE
+DARK = constants.DARK_SQUARE
 
 PIECE_MAP = {
     'P': 'wp', 'N': 'wn', 'B': 'wb', 'R': 'wr', 'Q': 'wq', 'K': 'wk',
@@ -40,6 +41,7 @@ class SimpleBoardVisualizer:
         self.needs_redraw = True
         self.game = None
         self.lock = threading.Lock()
+        self._redraw_lock = threading.Lock()
 
     def _load_pieces(self):
         pieces = {}
@@ -59,7 +61,8 @@ class SimpleBoardVisualizer:
 
     def render(self):
         """Request a redraw of the board."""
-        self.needs_redraw = True
+        with self._redraw_lock:
+            self.needs_redraw = True
 
     def pump_events(self):
         """
@@ -74,10 +77,14 @@ class SimpleBoardVisualizer:
     
     def render_if_needed(self):
         """Draw the board if redraw is needed (call from main thread loop)."""
+        with self._redraw_lock:
+            should_render = self.needs_redraw
+            if should_render:
+                self.needs_redraw = False
+        
         if self.needs_redraw and self.game:
             with self.lock:
                 self._draw()
-                self.needs_redraw = False
     
     def run(self):
         """Main pygame event loop. Should be called in main thread or started in a thread."""
@@ -95,7 +102,7 @@ class SimpleBoardVisualizer:
                     self._draw()
                     self.needs_redraw = False
             
-            clock.tick(60)  # 60 FPS
+            clock.tick(constants.BOARD_FPS)  # 60 FPS
         
         self.close()
 

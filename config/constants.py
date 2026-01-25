@@ -1,0 +1,24 @@
+# Audio configuration
+PHRASE_TIME_LIMIT = 4.0
+VAD_PAUSE_THRESHOLD = 0.6
+ENERGY_THRESHOLD = 150
+NON_SPEAKING_DURATION = 0.4
+
+# TTS configuration
+TTS_CACHE_SIZE = 50
+TTS_RATE = "+30%"
+
+# UI configuration
+BOARD_SQUARE_SIZE = 80
+BOARD_SIZE = 640
+BOARD_FPS = 60
+LIGHT_SQUARE = (240, 217, 181)
+DARK_SQUARE = (181, 136, 99)
+
+# Engine configuration
+DEFAULT_SKILL_LEVEL = 10
+DEFAULT_THINK_TIME = 1.0
+TIMEOUT_STOCKFISH = 360
+
+# TODO: Change inside files to use constants
+

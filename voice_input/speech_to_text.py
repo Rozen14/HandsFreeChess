@@ -7,7 +7,8 @@ import logging # TODO: Remove prints for proper logging
 import time
 import tempfile
 
-from utils.audio_state import AudioStateManager, ListeningContext
+from config import constants
+from utils.audio_state import AudioStateManager, AudioContext
 # TODO: add interface for microphone selection
 # TODO: Migrate from .wav into in-memory audio buffers
 
@@ -123,9 +124,9 @@ class SpeechRecognizer:
         # Initialize recognizer
         self.recognizer = sr.Recognizer()
         self.recognizer.dynamic_energy_threshold = False
-        self.recognizer.energy_threshold = 150
-        self.recognizer.pause_threshold = 0.6
-        self.recognizer.non_speaking_duration = 0.4
+        self.recognizer.energy_threshold = constants.ENERGY_THRESHOLD
+        self.recognizer.pause_threshold = constants.VAD_PAUSE_THRESHOLD
+        self.recognizer.non_speaking_duration = constants.NON_SPEAKING_DURATION
         
         # Initialize Whisper model
         self.model = WhisperModel(
