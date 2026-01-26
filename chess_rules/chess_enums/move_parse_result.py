@@ -14,3 +14,4 @@ from dataclasses import dataclass
 class ParsedMove:
     result: MoveParseResult
     uci: str | None = None
+    metadata: dict | None = None # For extra info like castling side

@@ -12,6 +12,8 @@ from app.app_loop import AppLoop
 from utils.environment import setup_ffmpeg
 from utils.audio_setup import setup_microphone, setup_audio_components
 from config import constants
+from utils.audio_coordinator import AudioCoordinator
+from chess_rules.chess_enums.player_type import OpponentType as OT
 
 # TODO: Remove prints for proper logging
 
@@ -26,16 +28,16 @@ def run_local_game():
     setup_ffmpeg()
     mic_index = setup_microphone()
     
-    recognizer, tts, audio_state = setup_audio_components(mic_index)
+    audio = AudioCoordinator(mic_index=mic_index)
     
     game = gi.GameState(player_color="white")
     board_view = SimpleBoardVisualizer()
     
     controller = vgc.GameController(
         game, 
-        tts, 
+        audio.tts, 
         board_view=board_view,
-        opponent_type="human"
+        opponent_type=OT.HUMAN
     )
     
     print("\nVoice Chess Interface Started")
@@ -44,7 +46,7 @@ def run_local_game():
     
     # STT thread
     stt_thread = threading.Thread(
-        target=recognizer.listen_loop,
+        target=audio.listen_loop,
         kwargs={"callback": controller.handle_speech},
         daemon=True
     )
@@ -59,8 +61,7 @@ def run_local_game():
         print("\nStopping...")
     finally:
         app.stop()
-        recognizer.cleanup()
-        tts.shutdown()
+        audio.shutdown()
         print("Goodbye!")
 
 
@@ -101,7 +102,7 @@ def run_stockfish_game():
         game, 
         tts, 
         board_view=board_view,
-        opponent_type="stockfish"
+        opponent_type=OT.STOCKFISH
     )
     
     # Override wait_for_opponent_move to use Stockfish

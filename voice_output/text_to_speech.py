@@ -14,7 +14,7 @@ import time
 from collections import OrderedDict
 from config import constants
 
-from utils.audio_state import AudioStateManager, AudioContext
+from utils.audio_state import AudioStateManager, AudioContext, AudioMode
 # TODO: Remove all prints for proper logging
 # TODO: Migrate from .wav into in-memory audio buffers
 
@@ -265,7 +265,7 @@ class TextToSpeech:
         """
         Play audio synchronously with proper coordination
         """
-        context = SpeakingContext(self.audio_state) if self.audio_state else None
+        context = AudioContext(self.audio_state, AudioMode.SPEAKING) if self.audio_state else None
         
         try:
             if context:

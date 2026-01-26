@@ -1,6 +1,7 @@
 import chess
 import re
 from chess_rules.chess_enums.move_parse_result import ParsedMove, MoveParseResult
+from chess_rules import move_validator as mv
 
 class UCIConverter:
     """
@@ -10,7 +11,7 @@ class UCIConverter:
     Everything else in the system uses pure UCI.
     """
     
-    def __init__(self, board: chess.Board):
+    def __init__(self, board: chess.Board, validator: mv.MoveValidator):
         """
         Initialize converter with current board state.
         
@@ -18,6 +19,7 @@ class UCIConverter:
             board: Current chess board (needed for context)
         """
         self.board = board
+        self.validator = validator
     
     def to_uci(self, text: str) -> ParsedMove:
         """
@@ -46,43 +48,12 @@ class UCIConverter:
         """
         text = text.strip().lower()
         
-        if not text:
+        if not text: 
             return ParsedMove(MoveParseResult.NOT_UNDERSTOOD)
         
-        # Check if already UCI and if legal
+        # Check if already UCI and if legal - DELEGATE TO VALIDATOR
         if self._is_uci(text):
-            if self._is_legal_uci(text):
-                return ParsedMove(MoveParseResult.OK, text)
-            else:
-                return ParsedMove(MoveParseResult.INVALID)
-        
-        # If SAN, check if ambiguous
-        san = text
-        if self._is_ambiguous_san(san):
-            return ParsedMove(MoveParseResult.AMBIGUOUS)
-        
-        # Convert from SAN to UCI
-        uci = self._san_to_uci(text)
-        if uci:
-            return ParsedMove(MoveParseResult.OK, uci)
-        
-        # Parse natural language to SAN, then to UCI
-        san = self._parse_natural_language(text)
-        if san:
-            if self._is_ambiguous_san(san):
-                return ParsedMove(MoveParseResult.AMBIGUOUS)
-            
-            uci = self._san_to_uci(san)
-            if uci:
-                return ParsedMove(MoveParseResult.OK, uci)
-        
-        # Partial move (e.g., "e4", "Nf3") - find matching legal move
-        uci = self._find_partial_move(text)
-        if uci:
-            return ParsedMove(MoveParseResult.OK, uci)
-        
-        # Could not parse
-        return ParsedMove(MoveParseResult.NOT_UNDERSTOOD)
+            return self.validator.parse_and_validate(text)
     
     def _is_uci(self, text: str) -> bool:
         """Check if text is valid UCI format."""
@@ -239,16 +210,6 @@ class UCIConverter:
         
         return None
     
-    def _is_legal_uci(self, uci: str) -> bool:
-        """
-        Check if UCI move is legal
-        """
-        try: 
-            move = chess.Move.from_uci(uci)
-            return move in self.board.legal_moves
-        except:
-            return False
-        
     def _is_ambiguous_san(self, san: str) -> bool:
         """
         Check if a SAN move is ambiguous in the current board position.

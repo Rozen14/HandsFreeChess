@@ -25,32 +25,51 @@ class MoveAnnouncer:
             chess.PAWN: "pawn"
         }
     
-    def announce_move(self, move_uci: str, piece_type: int, is_capture: bool = False, 
-                     is_castling: bool = False, castling_side: Optional[str] = None,
-                     promotion: Optional[int] = None) -> str:
+    def announce_move_from_board(self, move_uci: str, board: chess.Board) -> str:
         """
-        Announce a move in natural language.
+        PRIMARY METHOD: Announce a move by inspecting the board state.
+        
+        This is the recommended method for all move announcements.
         
         Args:
-            move_uci: Move in UCI notation (e.g., "e2e4")
-            piece_type: chess.PAWN, chess.KNIGHT, etc.
-            is_capture: Whether the move captures a piece
-            is_castling: Whether this is a castling move
-            castling_side: "kingside" or "queenside" if castling
-            promotion: Promotion piece type (chess.QUEEN, etc.) if applicable
+            move_uci: Move in UCI notation
+            board: Board state BEFORE the move
             
         Returns:
             Natural language description
         """
-        # Castling
-        if is_castling:
-            return f"Castled {castling_side}"
+        try:
+            move = chess.Move.from_uci(move_uci)
+        except (ValueError, AssertionError):
+            return "Invalid move"
         
-        # Get destination square
-        dest = move_uci[2:4]  # Extract destination from UCI (e.g., "e4" from "e2e4")
+        from_square = move.from_square
+        to_square = move.to_square
+        
+        # Get the piece that's moving
+        piece = board.piece_at(from_square)
+        if not piece:
+            return "Invalid move"
+        
+        piece_type = piece.piece_type
         piece_name = self.piece_symbols[piece_type]
         
-        # Promotion
+        # Get destination square name
+        dest = chess.square_name(to_square)
+        
+        # Check for castling
+        if piece_type == chess.KING:
+            from_file = chess.square_file(from_square)
+            to_file = chess.square_file(to_square)
+            if abs(from_file - to_file) == 2:
+                side = "kingside" if to_file > from_file else "queenside"
+                return f"Castled {side}"
+        
+        # Check for capture
+        is_capture = board.is_capture(move)
+        
+        # Check for promotion
+        promotion = move.promotion
         if promotion:
             promo_name = self.piece_symbols[promotion]
             if is_capture:
@@ -64,59 +83,34 @@ class MoveAnnouncer:
         else:
             return f"{piece_name.capitalize()} to {dest}"
     
-    def announce_move_from_board(self, move_uci: str, board: chess.Board) -> str:
+    # DEPRECATED
+    def announce_move(self, move_uci: str, piece_type: int, is_capture: bool = False, 
+                     is_castling: bool = False, castling_side: Optional[str] = None,
+                     promotion: Optional[int] = None) -> str:
         """
-        Announce a move by inspecting the board state (convenience method).
+        DEPRECATED: Use announce_move_from_board() instead.
         
-        Use this when you have the board available and want simple announcement.
-        For better performance, use announce_move() with pre-computed info.
-        
-        Args:
-            move_uci: Move in UCI notation
-            board: Board state BEFORE the move
-            
-        Returns:
-            Natural language description
+        This method requires manually extracting move information,
+        which is error-prone and duplicates logic.
         """
-        try:
-            move = chess.Move.from_uci(move_uci)
-        except:
-            return "Invalid move"
+        # Castling
+        if is_castling:
+            return f"Castled {castling_side}"
         
-        from_square = move.from_square
-        to_square = move.to_square
+        dest = move_uci[2:4]
+        piece_name = self.piece_symbols[piece_type]
         
-        # Get the piece that's moving
-        piece = board.piece_at(from_square)
-        if not piece:
-            return "Invalid move"
+        if promotion:
+            promo_name = self.piece_symbols[promotion]
+            if is_capture:
+                return f"Pawn takes {dest} and promotes to {promo_name}"
+            else:
+                return f"Pawn to {dest} and promotes to {promo_name}"
         
-        piece_type = piece.piece_type
-        
-        # Check for castling
-        is_castling = False
-        castling_side = None
-        if piece_type == chess.KING:
-            from_file = chess.square_file(from_square)
-            to_file = chess.square_file(to_square)
-            if abs(from_file - to_file) == 2:
-                is_castling = True
-                castling_side = "kingside" if to_file > from_file else "queenside"
-        
-        # Check for capture
-        is_capture = board.is_capture(move)
-        
-        # Get promotion
-        promotion = move.promotion
-        
-        return self.announce_move(
-            move_uci, 
-            piece_type, 
-            is_capture=is_capture,
-            is_castling=is_castling,
-            castling_side=castling_side,
-            promotion=promotion
-        )    
+        if is_capture:
+            return f"{piece_name.capitalize()} takes {dest}"
+        else:
+            return f"{piece_name.capitalize()} to {dest}"
     
     def announce_opponent_move(self, move_uci: str, opponent_color: str) -> str:
         """

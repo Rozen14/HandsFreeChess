@@ -104,15 +104,24 @@ class GameState:
                     # Both sides legal - ambiguous
                     return ParsedMove(MoveParseResult.AMBIGUOUS)
                 else:
+                    side_name, uci = potential_moves[0]
                     # Only one side legal 
-                    return ParsedMove(MoveParseResult.OK, potential_moves[0][1])
+                    return ParsedMove(
+                        MoveParseResult.OK, 
+                        uci, 
+                        metadata={'castling_side': side_name}
+                    )
 
         # Specific side requested
         side_name = 'kingside' if requested_side else 'queenside'
         
         for available_side, uci in potential_moves:
             if available_side == side_name:
-                return ParsedMove(MoveParseResult.OK, uci)
+                return ParsedMove(
+                    MoveParseResult.OK, 
+                    uci,
+                    metadata={'castling_side': side_name}
+                )
             
         # Requested side not legal
         return ParsedMove(MoveParseResult.INVALID)        

@@ -8,7 +8,7 @@ import time
 import tempfile
 
 from config import constants
-from utils.audio_state import AudioStateManager, AudioContext
+from utils.audio_state import AudioStateManager, AudioContext, AudioMode
 # TODO: add interface for microphone selection
 # TODO: Migrate from .wav into in-memory audio buffers
 
@@ -152,7 +152,7 @@ class SpeechRecognizer:
             Transcribed text or None if no speech detected
         """        
         # TODO: Adjust listening time or change to other method...
-        context = ListeningContext(self.audio_state) if self.audio_state else contextlib.nullcontext()
+        context = AudioContext(self.audio_state, AudioMode.LISTENING) if self.audio_state else contextlib.nullcontext()
         with context:
             # Small delay after TTS finishes to let speakers settle
             if self.audio_state:

@@ -2,7 +2,8 @@ from voice_input import intent_classifier as ic
 from chess_rules import uci_converter as uc
 from chess_rules.chess_enums.move_parse_result import MoveParseResult
 from voice_output import game_announcer as ga
-from chess import COLORS
+from chess_rules.chess_enums.player_type import OpponentType as OT
+import chess
 
 # TODO: Remove prints for proper logging...
 
@@ -14,12 +15,12 @@ class GameController:
     and user interactions. It manages disambiguation, game actions, and announcements.
     """
     
-    def __init__(self, game, tts, board_view = None, opponent_type = "human", verbose: bool = False):
+    def __init__(self, game, tts, board_view = None, opponent_type: OT = OT.HUMAN, verbose: bool = False):
         self.game = game
         self.tts = tts
         self.announcer = ga.MoveAnnouncer()
         self.intent_classifier = ic.IntentClassifier()
-        self.converter = uc.UCIConverter(self.game.board)
+        self.converter = uc.UCIConverter(self.game.board, self.game.validator)
         self.verbose = verbose
         
         # State management
@@ -110,7 +111,7 @@ class GameController:
             # and flow continues, how does he ask for repetition?
             
             # Visualize board
-            if self.board_view and self.opponent_type != "online":
+            if self.board_view and self.opponent_type != OT.ONLINE:
                 self.board_view.render()
             
             # Check for check
@@ -151,8 +152,8 @@ class GameController:
         success, error = self.game.play_move(castle_result.uci)
         
         if success:    
-            # TODO: Add which side...        
-            side = ""   
+            side = castle_result.metadata.get('castling_side', '') if castle_result.metadata else ''
+            
             announcement = f"Castled {side}" 
             self.tts.speak(announcement)
             self.last_announcement = announcement
@@ -168,8 +169,8 @@ class GameController:
             # Check for game over
             if self.game.is_game_over():
                 outcome = self.game.board.outcome()
-                result = outcome.result() # TODO: If game was over from a castle, means checkmate...                
-                self.end_game(result, )
+                result = outcome.result() 
+                self.end_game(result, outcome.termination)
                 return False
             
             return self.handle_opponent_turn()  
@@ -265,7 +266,7 @@ class GameController:
             self.tts.speak("Waiting for opponent.")                
         
         # 1. Get opponent move
-        if self.opponent_type != "human":
+        if self.opponent_type != OT.HUMAN:
             # TODO: Set timeout based on time constraints for current game...
             # ie. blitz = 3/5 mins, rapid = 15/30/etc., bullet = 30sec etc.
             opponent_move = self.wait_for_opponent_move()
@@ -294,7 +295,7 @@ class GameController:
             self.board_view.render()
         
         # 3. Announce opponent move
-        opponent_color = "black" if self.game.player_color == COLORS[0] else "white"
+        opponent_color = "black" if self.game.player_color == chess.COLORS[0] else "white"
         
         self.announce_opponent_move(opponent_move, opponent_color, board_before_move)
         
