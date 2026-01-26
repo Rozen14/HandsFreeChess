@@ -5,10 +5,18 @@ ENERGY_THRESHOLD = 150
 NON_SPEAKING_DURATION = 0.4
 
 # TTS configuration
-TTS_CACHE_SIZE = 50
+TTS_CACHE_SIZE = 100
 TTS_RATE = "+30%"
+TTS_PREGEN_MOVES = 8 
 BASE_DELAY = 0.4
 PER_WORD_DELAY = 0.1
+
+# TTS optimization modes
+class TTSMode:
+    """TTS verbosity modes for different time controls."""
+    FULL = "full"           # Full announcements (classical/rapid)
+    COMPACT = "compact"     # Shorter phrases (blitz)
+    MINIMAL = "minimal"     # Minimal output (bullet)
 
 # UI configuration
 BOARD_SQUARE_SIZE = 80
@@ -22,5 +30,10 @@ DEFAULT_SKILL_LEVEL = 10
 DEFAULT_THINK_TIME = 1.0
 TIMEOUT_STOCKFISH = 360
 
-# TODO: Change inside files to use constants
-
+# Game mode time controls (for TTS mode selection)
+TIME_CONTROLS = {
+    "bullet": {"base": 60, "increment": 0, "tts_mode": TTSMode.MINIMAL},
+    "blitz": {"base": 300, "increment": 0, "tts_mode": TTSMode.COMPACT},
+    "rapid": {"base": 900, "increment": 0, "tts_mode": TTSMode.FULL},
+    "classical": {"base": 1800, "increment": 0, "tts_mode": TTSMode.FULL},
+}

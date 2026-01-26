@@ -14,6 +14,7 @@ from utils.audio_setup import setup_microphone, setup_audio_components
 from config import constants
 from utils.audio_coordinator import AudioCoordinator
 from chess_rules.chess_enums.player_type import OpponentType as OT
+from utils.tts_predictor import integrate_predictor_with_controller
 
 # TODO: Remove prints for proper logging
 
@@ -39,6 +40,8 @@ def run_local_game():
         board_view=board_view,
         opponent_type=OT.HUMAN
     )
+    
+    integrate_predictor_with_controller(controller)
     
     print("\nVoice Chess Interface Started")
     print("Opponent moves will be entered manually")
@@ -104,6 +107,8 @@ def run_stockfish_game():
         board_view=board_view,
         opponent_type=OT.STOCKFISH
     )
+    
+    integrate_predictor_with_controller(controller)
     
     # Override wait_for_opponent_move to use Stockfish
     def wait_with_stockfish(timeout=constants.TIMEOUT_STOCKFISH):
