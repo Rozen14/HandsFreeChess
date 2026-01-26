@@ -7,6 +7,8 @@ NON_SPEAKING_DURATION = 0.4
 # TTS configuration
 TTS_CACHE_SIZE = 50
 TTS_RATE = "+30%"
+BASE_DELAY = 0.4
+PER_WORD_DELAY = 0.1
 
 # UI configuration
 BOARD_SQUARE_SIZE = 80

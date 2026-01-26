@@ -5,6 +5,7 @@ from voice_output import game_announcer as ga
 from chess_rules.chess_enums.player_type import OpponentType as OT
 import chess
 import time
+from config import constants
 
 # TODO: Remove prints for proper logging...
 
@@ -75,7 +76,7 @@ class GameController:
         elif intent_type == "positions":
             return self._handle_positions()
         else:
-            self.tts.speak("I didn't understand that command.")
+            self._speak_and_wait("I didn't understand that command.")
             return True
     
     def _speak_and_wait(self, text: str, extra_delay: float = 0.0):
@@ -90,9 +91,9 @@ class GameController:
         """
         self.tts.speak(text)
         
-        # Estimate speech duration: ~150ms per word + base delay
+        # Estimate speech duration: ~100ms per word + base delay
         word_count = len(text.split())
-        estimated_duration = 0.1 * word_count + 0.4 + extra_delay
+        estimated_duration = constants.PER_WORD_DELAY * word_count + constants.BASE_DELAY + extra_delay
         
         # Wait for audio state if available, otherwise use estimated time
         if self.tts.audio_state:
@@ -107,15 +108,15 @@ class GameController:
         
         # TODO: When a move is repeated it defaults to this...
         if parsed.result == MoveParseResult.NOT_UNDERSTOOD:
-            self.tts.speak("I didn't catch that. Please repeat.")
+            self._speak_and_wait("I didn't catch that. Please repeat.")
             return True
         
         if parsed.result == MoveParseResult.AMBIGUOUS:
-            self.tts.speak("That move is ambiguous. Please be more specific.")
+            self._speak_and_wait("That move is ambiguous. Please be more specific.")
             return True
         
         if parsed.result == MoveParseResult.INVALID:
-            self.tts.speak("That move is not legal.")
+            self._speak_and_wait("That move is not legal.")
             return True
         
         uci = parsed.uci
@@ -128,7 +129,7 @@ class GameController:
         
         if success:                         
             announcement = self.announcer.announce_move_from_board(uci, board_before_move)
-            self.tts.speak(announcement)
+            self._speak_and_wait(announcement)
             self.last_announcement = announcement
             # TODO: if user wants to listen to this announcement again
             # and flow continues, how does he ask for repetition?
@@ -139,7 +140,7 @@ class GameController:
             
             # Check for check
             if self.game.board.is_check():
-                self.tts.speak("Check!")
+                self._speak_and_wait("Check!")
                 
             # Check for game over
             if self.game.is_game_over():
@@ -162,12 +163,12 @@ class GameController:
         castle_result = self.game.parse_castling_intent(text)
 
         if castle_result.result == MoveParseResult.INVALID or castle_result.result == MoveParseResult.NOT_UNDERSTOOD: 
-            self.tts.speak("Castling is not legal in this position.")
+            self._speak_and_wait("Castling is not legal in this position.")
             return True
         
         # Check if ambiguous (both side available)
         if castle_result.result == MoveParseResult.AMBIGUOUS:
-            self.tts.speak("Which side? Kingisde or queenside?")
+            self._speak_and_wait("Which side? Kingisde or queenside?")
             self.pending_move = "castle"
             return True
         
@@ -178,7 +179,7 @@ class GameController:
             side = castle_result.metadata.get('castling_side', '') if castle_result.metadata else ''
             
             announcement = f"Castled {side}" 
-            self.tts.speak(announcement)
+            self._speak_and_wait(announcement)
             self.last_announcement = announcement
             
             # Visualize board
@@ -187,7 +188,7 @@ class GameController:
             
             # Check for check
             if self.game.board.is_check():
-                self.tts.speak("Check!")
+                self._speak_and_wait("Check!")
                 
             # Check for game over
             if self.game.is_game_over():
@@ -198,7 +199,7 @@ class GameController:
             
             return self.handle_opponent_turn()  
         else:
-            self.tts.speak("Cannot castle in this position.")
+            self._speak_and_wait("Cannot castle in this position.")
         
         return True
             
@@ -221,9 +222,9 @@ class GameController:
     def _handle_repeat(self) -> bool:
         """"""
         if self.last_announcement:
-            self.tts.speak(self.last_announcement)
+            self._speak_and_wait(self.last_announcement)
         else:
-            self.tts.speak("Nothing to repeat.")
+            self._speak_and_wait("Nothing to repeat.")
         return True
     
     def _handle_positions(self) -> bool:
@@ -233,13 +234,13 @@ class GameController:
     
     def end_game(self, result: str, reason):
         announcement = self.announcer.announce_game_over(result, reason)
-        self.tts.speak(announcement)
+        self._speak_and_wait(announcement)
         self.last_announcement = announcement
         
         # TODO: Add Elo change announcement if available
         # if elo_change:
         #     elo_announcement = self.announcer.announce_elo_change(new_elo, change)
-        #     self.tts.speak(elo_announcement)
+        #     self._speak_and_wait(elo_announcement)
         #     self.last_announcement = announcement
     
     def announce_opponent_move(self, move_uci: str, opponent_color: str, board_before_move) -> None:
@@ -252,7 +253,7 @@ class GameController:
         """        
         move_uci = self.announcer.announce_move_from_board(move_uci, board_before_move)
         announcement = self.announcer.announce_opponent_move(move_uci, opponent_color)
-        self.tts.speak(announcement)
+        self._speak_and_wait(announcement)
         self.last_announcement = announcement
     
     def wait_for_opponent_move(self, timeout: int = 360) -> str | None:
@@ -334,7 +335,7 @@ class GameController:
         """
         # TODO: Flow takes too long between announcing player's move and saying this...
         if self.verbose:
-            self.tts.speak("Waiting for opponent.")                
+            self._speak_and_wait("Waiting for opponent.")                
         
         # 1. Get opponent move
         if self.opponent_type == OT.HUMAN:
@@ -346,7 +347,7 @@ class GameController:
             opponent_move = self.wait_for_opponent_move()
 
             if opponent_move is None:
-                self.tts.speak("Timed out waiting for opponent.")
+                self._speak_and_wait("Timed out waiting for opponent.")
                 return True
             
         board_before_move = self.game.board.copy()
@@ -356,7 +357,7 @@ class GameController:
         
         if not success:
             # Should never get here in live games or games vs an engine...
-            self.tts.speak("Opponent played an invalid move")
+            self._speak_and_wait("Opponent played an invalid move")
             print(f"DEBUG: Invalid move: {opponent_move}")
             return True
         
@@ -371,7 +372,7 @@ class GameController:
         
         # 4. Check check
         if self.game.board.is_check():
-            self.tts.speak("Check!")
+            self._speak_and_wait("Check!")
             return True
         
         # 5. Check game over
