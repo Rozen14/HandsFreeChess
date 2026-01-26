@@ -82,7 +82,7 @@ class SimpleBoardVisualizer:
             if should_render:
                 self.needs_redraw = False
         
-        if self.needs_redraw and self.game:
+        if should_render and self.game:
             with self.lock:
                 self._draw()
     

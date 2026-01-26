@@ -105,13 +105,24 @@ class TextToSpeech:
             # Game endings
             "Checkmate!", "Stalemate.", "The game is a draw.",
             "Game over.",
-        ]
+        ]                
         
-        def _add_to_cache(self, phrase: str, data: tuple):
-            if len(self.memory_cache) >= self.max_cache_size:
-                self.memory_cache.popitem(last=False)  # Remove oldest
-            self.memory_cache[phrase] = data
+        # CAPTURE instance variables before threading!
+        voice = self.voice
+        rate = self.rate
+        volume = self.volume
+        cache_dir = self.cache_dir
+        target_sample_rate = self.target_sample_rate
+        memory_cache = self.memory_cache
+        cache_lock = self._cache_lock
+        max_cache_size = self.max_cache_size
         
+        def get_cache_path(text: str) -> Path:
+            """Local version of _get_cache_path."""
+            cache_key = f"{text}_{voice}_{rate}_{volume}"
+            file_hash = hashlib.md5(cache_key.encode()).hexdigest()
+            return cache_dir / f"{file_hash}.wav"
+            
         def generate_and_load():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -120,16 +131,16 @@ class TextToSpeech:
             success_count = 0
             
             for phrase in common_phrases:
-                cache_path = self._get_cache_path(phrase)
+                cache_path = get_cache_path(phrase)
                 
                 # Generate if not cached
                 if not cache_path.exists():
                     try:
                         communicate = edge_tts.Communicate(
                             text=phrase,
-                            voice=self.voice,
-                            rate=self.rate,
-                            volume=self.volume
+                            voice=voice,
+                            rate=rate,
+                            volume=volume
                         )
                         loop.run_until_complete(communicate.save(str(cache_path)))
                         # Small delay to avoid overwhemling edge-tts
@@ -148,11 +159,11 @@ class TextToSpeech:
                     data, sr = sf.read(str(cache_path), dtype="float32")
                     
                     # Resample if needed for consistency
-                    if sr != self.target_sample_rate:
+                    if sr != target_sample_rate:
                         import scipy.signal
-                        num_samples = int(len(data) * self.target_sample_rate / sr)
+                        num_samples = int(len(data) * target_sample_rate / sr)
                         data = scipy.signal.resample(data, num_samples)
-                        sr = self.target_sample_rate
+                        sr = target_sample_rate
                     
                     # Normalize audio to prevent clipping
                     if len(data) > 0:
@@ -160,7 +171,11 @@ class TextToSpeech:
                         if max_val > 0:
                             data = data / max_val * 0.95
                         
-                    _add_to_cache(phrase, (data, sr))
+                    with cache_lock:
+                        if len(memory_cache) >= max_cache_size:
+                            memory_cache.popitem(last=False)  # Remove oldest
+                        memory_cache[phrase] = (data, sr)
+                    
                     success_count += 1
                 
                 except Exception as e:

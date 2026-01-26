@@ -4,6 +4,7 @@ from chess_rules.chess_enums.move_parse_result import MoveParseResult
 from voice_output import game_announcer as ga
 from chess_rules.chess_enums.player_type import OpponentType as OT
 import chess
+import time
 
 # TODO: Remove prints for proper logging...
 
@@ -20,7 +21,7 @@ class GameController:
         self.tts = tts
         self.announcer = ga.MoveAnnouncer()
         self.intent_classifier = ic.IntentClassifier()
-        self.converter = uc.UCIConverter(self.game.board, self.game.validator)
+        self.converter = uc.UCIConverter(self.game.board)
         self.verbose = verbose
         
         # State management
@@ -35,6 +36,7 @@ class GameController:
 
         if self.board_view:
             self.board_view.set_game(game)
+            self.board_view.render()
         
     def handle_speech(self, text: str) -> bool:
         """
@@ -76,6 +78,29 @@ class GameController:
             self.tts.speak("I didn't understand that command.")
             return True
     
+    def _speak_and_wait(self, text: str, extra_delay: float = 0.0):
+        """
+        Speak text and wait for TTS to likely finish.
+        
+        This helps prevent STT from picking up TTS output.
+        
+        Args:
+            text: Text to speak
+            extra_delay: Additional delay after estimated speech time
+        """
+        self.tts.speak(text)
+        
+        # Estimate speech duration: ~150ms per word + base delay
+        word_count = len(text.split())
+        estimated_duration = 0.1 * word_count + 0.4 + extra_delay
+        
+        # Wait for audio state if available, otherwise use estimated time
+        if self.tts.audio_state:
+            # Wait for TTS to finish (with timeout)
+            self.tts.audio_state.wait_until_not_speaking(timeout=estimated_duration + 2.0)
+        else:
+            time.sleep(estimated_duration)
+        
     def _handle_move(self, text: str) -> bool:
         """"""        
         parsed = self.converter.to_uci(text)
@@ -96,14 +121,12 @@ class GameController:
         uci = parsed.uci
         print(f"Parsed: {uci}")
         
-        # Lazy copy
-        board_before_move = None   
+        board_before_move = self.game.board.copy()
         
         # Validate and execute move
         success, error = self.game.play_move(uci)
         
-        if success:             
-            board_before_move = self.game.board.copy(stack=False)  # shallow copy
+        if success:                         
             announcement = self.announcer.announce_move_from_board(uci, board_before_move)
             self.tts.speak(announcement)
             self.last_announcement = announcement
@@ -254,6 +277,54 @@ class GameController:
         # TODO: Once integration has been completed, this can be refactored...
         return None
     
+    def _get_manual_opponent_move(self) -> str:
+        """
+        Get opponent move from manual input with retry support.
+        
+        Returns:
+            Valid UCI move string
+        """
+        while True:
+            print("\n=== Simulating opponent move ===")
+            print("Commands: UCI move (e.g., 'e7e5'), 'undo' to retry, 'quit' to exit")
+            user_input = input("Enter opponent's move: ").strip().lower()
+            
+            # Handle special commands
+            if user_input == 'quit' or user_input == 'exit':
+                raise KeyboardInterrupt("User requested exit")
+            
+            if user_input == 'undo' or user_input == 'retry':
+                print("Nothing to undo - enter a valid move.")
+                continue
+            
+            if user_input == 'board':
+                print(self.game.board)
+                continue
+            
+            if user_input == 'legal':
+                print("Legal moves:", [m.uci() for m in self.game.board.legal_moves])
+                continue
+            
+            if user_input == 'help':
+                print("Commands:")
+                print("  <uci>  - Make a move (e.g., e7e5, g8f6)")
+                print("  board  - Show current board")
+                print("  legal  - Show legal moves")
+                print("  quit   - Exit the game")
+                continue
+            
+            # Validate the move before returning
+            try:
+                move = chess.Move.from_uci(user_input)
+                if move in self.game.board.legal_moves:
+                    return user_input
+                else:
+                    print(f"Invalid move: '{user_input}' is not legal in this position.")
+                    print("Type 'legal' to see legal moves, or 'board' to see the board.")
+            except (ValueError, AssertionError):
+                print(f"Invalid UCI format: '{user_input}'")
+                print("Use format like 'e7e5', 'g8f6', 'e7e8q' (for promotion)")
+    
     def handle_opponent_turn(self) -> bool:
         """
         Handles opponent move lifecycle.
@@ -266,19 +337,18 @@ class GameController:
             self.tts.speak("Waiting for opponent.")                
         
         # 1. Get opponent move
-        if self.opponent_type != OT.HUMAN:
+        if self.opponent_type == OT.HUMAN:
+            # Manual input with retry support
+            opponent_move = self._get_manual_opponent_move()
+        else:
             # TODO: Set timeout based on time constraints for current game...
-            # ie. blitz = 3/5 mins, rapid = 15/30/etc., bullet = 30sec etc.
+            # ie. blitz = 3/5 mins, rapid = 15/30/etc., bullet = 30sec etc.            
             opponent_move = self.wait_for_opponent_move()
 
             if opponent_move is None:
                 self.tts.speak("Timed out waiting for opponent.")
                 return True
             
-        else:           
-            print("\n=== Simulating opponent move ===")
-            opponent_move = input("Enter opponent's move in UCI (e.g., 'e7e5', 'g8f6'): ").strip()
-
         board_before_move = self.game.board.copy()
 
         # 2.1 Apply opponent move
@@ -291,11 +361,11 @@ class GameController:
             return True
         
         # 2.2 Visualize opponent move
-        if self.board_view and self.opponent_type != "online":
+        if self.board_view and self.opponent_type != OT.ONLINE:
             self.board_view.render()
         
         # 3. Announce opponent move
-        opponent_color = "black" if self.game.player_color == chess.COLORS[0] else "white"
+        opponent_color = "black" if self.game.player_color == chess.WHITE else "white"
         
         self.announce_opponent_move(opponent_move, opponent_color, board_before_move)
         

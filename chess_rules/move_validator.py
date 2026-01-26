@@ -32,7 +32,7 @@ class MoveValidator:
             move_uci: Move in UCI notation (e.g., "e2e4", "e7e8q")
             
         Returns:
-            ParsedMove with result and optional chess.Move object
+            ParsedMove with result and optional uci string
         """
         try: 
             move = chess.Move.from_uci(move_uci)

@@ -168,21 +168,31 @@ class SpeechRecognizer:
                     )
 
                 wav_data = audio.get_wav_data()
-                with tempfile.NamedTemporaryFile(suffix='.wav', delete=True) as tmp:
+                
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
                     tmp.write(wav_data)
                     tmp.flush()
-                    segments, info = self.model.transcribe(
-                        tmp.name,                                                            
-                        vad_filter=True,
-                        vad_parameters={
-                            # "min_silence_duration_ms": 300
-                        },
-                        beam_size=1,
-                        best_of=1
-                    )
+                    tmp_path = tmp.name
+                    try:
+                        segments, info = self.model.transcribe(
+                            tmp.name,                                                            
+                            vad_filter=True,
+                            vad_parameters={
+                                # "min_silence_duration_ms": 300
+                            },
+                            beam_size=1,
+                            best_of=1
+                        )
+                        
+                        text = "".join(segment.text for segment in segments).strip()
+                        return text if text else None
                     
-                text = "".join(segment.text for segment in segments).strip()
-                return text if text else None
+                    finally:
+                        # Clean up temp file
+                        try:
+                            os.unlink(tmp_path)
+                        except:
+                            pass
 
             except Exception as e:
                 print(f"Speech recognition error: {e}")

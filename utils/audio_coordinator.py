@@ -19,7 +19,7 @@ class AudioCoordinator:
         """
         self.state = AudioStateManager()
         
-        self.tts = TextToSpeech(self.state)
+        self.tts = TextToSpeech(audio_state=self.state)
         
         self.recognizer = SpeechRecognizer(
             mic_index=mic_index,
@@ -45,4 +45,3 @@ class AudioCoordinator:
     def get_cache_stats(self) -> dict:
         """Get TTS cache statistics."""
         return self.tts.get_cache_stats()
-# TODO: Implement inside necessary instances... 
