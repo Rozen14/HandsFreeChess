@@ -7,7 +7,8 @@ and pre-generates their audio in the background.
 
 import chess 
 from typing import Optional
-
+# TODO: Fix ImportError: cannot import name 
+# 'integrate_predictor_with_controller' from 'utils.tts_predictor' (c:\Users\samue\PersonalProjects\HandsFreeChess\utils\tts_predictor.py)
 
 class TTSPredictor:
     """
@@ -186,48 +187,48 @@ class TTSPredictor:
         
         if phrases:
             self.tts.pregenerate(phrases)
+
+def integrate_predictor_with_controller(controller):
+    """
+    Monkey-patch the controller to add predictive pre-generation.
     
-    def integrate_predictor_with_controller(controller):
-        """
-        Monkey-patch the controller to add predictive pre-generation.
-        
-        Usage:
-            controller = GameController(...)
-            integrate_predictor_with_controller(controller)
-        """
-        predictor = TTSPredictor(controller.tts)
+    Usage:
+        controller = GameController(...)
+        integrate_predictor_with_controller(controller)
+    """
+    predictor = TTSPredictor(controller.tts)
     
-        # Store original methods
-        original_handle_move = controller._handle_move
-        original_handle_opponent_turn = controller.handle_opponent_turn
+    # Store original methods
+    original_handle_move = controller._handle_move
+    original_handle_opponent_turn = controller.handle_opponent_turn
+    
+    def enhanced_handle_move(text: str) -> bool:
+        result = original_handle_move(text)
         
-        def enhanced_handle_move(text: str) -> bool:
-            result = original_handle_move(text)
-            
-            # After player moves, predict opponent responses
-            if result:  # Game continues
-                predictor.predict_after_player_move(
-                    controller.game.board, 
-                    controller.game.player_color
-                )
-            
-            return result
+        # After player moves, predict opponent responses
+        if result:  # Game continues
+            predictor.predict_after_player_move(
+                controller.game.board, 
+                controller.game.player_color
+            )
         
-        def enhanced_handle_opponent_turn() -> bool:
-            result = original_handle_opponent_turn()
-            
-            # After opponent moves, predict player's likely moves
-            if result:  # Game continues
-                predictor.predict_for_player_turn(
-                    controller.game.board,
-                    controller.game.player_color
-                )
-            
-            return result
+        return result
+    
+    def enhanced_handle_opponent_turn() -> bool:
+        result = original_handle_opponent_turn()
         
-        # Replace methods
-        controller._handle_move = enhanced_handle_move
-        controller.handle_opponent_turn = enhanced_handle_opponent_turn
-        controller._tts_predictor = predictor
+        # After opponent moves, predict player's likely moves
+        if result:  # Game continues
+            predictor.predict_for_player_turn(
+                controller.game.board,
+                controller.game.player_color
+            )
         
-        return controller
+        return result
+    
+    # Replace methods
+    controller._handle_move = enhanced_handle_move
+    controller.handle_opponent_turn = enhanced_handle_opponent_turn
+    controller._tts_predictor = predictor
+    
+    return controller

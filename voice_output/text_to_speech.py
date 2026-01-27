@@ -60,7 +60,7 @@ class TextToSpeech:
         
         # In-memory audio cache (phrase -> (audio_data, sample_rate))
         self.max_cache_size = constants.TTS_CACHE_SIZE
-        self.memory_cache: dict[str, tuple[np.ndarray, int]] = {}
+        self.memory_cache: OrderedDict[str, tuple[np.ndarray, int]] = OrderedDict()
         self._cache_lock = threading.Lock()  
         
         # Standard sample rate for consistency
@@ -75,7 +75,7 @@ class TextToSpeech:
             target=self._worker,
             daemon=True
         )
-        self.thread.start()
+        self._thread.start()
         
         # Background pre-generation thread
         self._pregen_queue: queue.Queue[str] = queue.Queue()
