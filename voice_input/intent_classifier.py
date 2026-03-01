@@ -4,6 +4,7 @@ from voice_input import stt_postprocessor as sttp
 # current board position (?), others...
 # TODO: Maybe add more colloquial examples so it can understand slang (?)
 
+
 INTENT_PATTERNS = {
     "move": [
         # Standard piece moves
@@ -198,4 +199,3 @@ class IntentClassifier:
         #     print(f"  Confidence: {best_score:.2f}")
 
         return best_intent if best_score > threshold else None
-    

@@ -9,12 +9,10 @@ from chess_rules import game_interface as gi
 from controller import voice_game_controller as vgc
 from app.board_view import SimpleBoardVisualizer
 from app.app_loop import AppLoop
-from utils.environment import setup_ffmpeg
 from utils.audio_setup import setup_microphone, setup_audio_components
 from config import constants
-from utils.audio_coordinator import AudioCoordinator
 from chess_rules.chess_enums.player_type import OpponentType as OT
-from utils.tts_predictor import integrate_predictor_with_controller
+
 
 # TODO: Remove prints for proper logging
 
@@ -25,46 +23,45 @@ def run_local_game():
     """
     print("\n=== LOCAL GAME MODE ===")
     print("You'll manually enter opponent moves via keyboard.\n")
-    
-    setup_ffmpeg()
+
     mic_index = setup_microphone()
-    
-    audio = AudioCoordinator(mic_index=mic_index)
-    
+    recognizer, tts, cache, audio_state = setup_audio_components(mic_index)
+
+    # Wait for cache to be ready
+    cache.wait_for_cache_ready(timeout=30)
+
     game = gi.GameState(player_color="white")
     board_view = SimpleBoardVisualizer()
-    
+
     controller = vgc.GameController(
-        game, 
-        audio.tts, 
+        game,
+        tts,
         board_view=board_view,
         opponent_type=OT.HUMAN
     )
-    
-    integrate_predictor_with_controller(controller)
-    
+
     print("\nVoice Chess Interface Started")
     print("Opponent moves will be entered manually")
     print("Close the board window to exit\n")
-    
+
     # STT thread
     stt_thread = threading.Thread(
-        target=audio.listen_loop,
+        target=recognizer.listen_loop,
         kwargs={"callback": controller.handle_speech},
         daemon=True
     )
     stt_thread.start()
-    
+
     # Start app loop
     app = AppLoop(controller, board_view)
-    
+
     try:
         app.run()
     except KeyboardInterrupt:
         print("\nStopping...")
     finally:
         app.stop()
-        audio.shutdown()
+        tts.shutdown()
         print("Goodbye!")
 
 
@@ -75,8 +72,6 @@ def run_stockfish_game():
     """
     print("\n=== STOCKFISH MODE ===")
     print("Play against the Stockfish engine.\n")
-    
-    setup_ffmpeg()
     
     # Import here to avoid dependency if not using this mode
     from tests.test_modes import StockfishOpponent, get_stockfish_path
@@ -94,22 +89,20 @@ def run_stockfish_game():
     
     # Setup audio
     mic_index = setup_microphone()
-    recognizer, tts, audio_state = setup_audio_components(mic_index)
-    
+    recognizer, tts, cache, audio_state = setup_audio_components(mic_index)
+
     # Initialize game components
     game = gi.GameState(player_color="white")
     board_view = SimpleBoardVisualizer()
     stockfish = StockfishOpponent(str(stockfish_path), skill_level=skill_level, time_limit=constants.DEFAULT_THINK_TIME)
-    
+
     controller = vgc.GameController(
-        game, 
-        tts, 
+        game,
+        tts,
         board_view=board_view,
         opponent_type=OT.STOCKFISH
     )
-    
-    integrate_predictor_with_controller(controller)
-    
+
     # Override wait_for_opponent_move to use Stockfish
     def wait_with_stockfish(timeout=constants.TIMEOUT_STOCKFISH):
         """Get Stockfish's move."""
@@ -118,9 +111,9 @@ def run_stockfish_game():
         uci_move = move.uci()
         print(f"[Stockfish plays: {uci_move}]")
         return uci_move
-    
+
     controller.wait_for_opponent_move = wait_with_stockfish
-    
+
     # Start STT thread
     stt_thread = threading.Thread(
         target=recognizer.listen_loop,
@@ -128,14 +121,14 @@ def run_stockfish_game():
         daemon=True
     )
     stt_thread.start()
-    
+
     print("\n" + "=" * 60)
     print("Game started! You are WHITE, Stockfish is BLACK")
     print("Say your moves out loud (e.g., 'pawn to e4', 'knight f3')")
     print("Close the board window to quit")
     print("=" * 60 + "\n")
-    
-    tts.speak("Game started. You are white. Make your move.")
+
+    tts.speak_tokens(["game started", "you are white", "make your move"], block=True)
     board_view.render()
     
     # Start app loop

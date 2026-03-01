@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.env/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Tests and docs (optional)
+tests/
+*.docx
+*.log
+
+# Large runtime artifacts
+models/
+*.pt
+*.bin
+*.onnx
+
+# Build artifacts
+build/
+dist/
+
+# Node (future extension)
+node_modules/
+
+# Docker itself
+docker-compose.yml
+
+# Audio files
+*.wav
+
+# Stockfish asset
+assets/stockfish/

@@ -120,31 +120,3 @@ class AudioStateManager:
         with self._lock:
             if callback in self._callbacks:
                 self._callbacks.remove(callback)
-          
-                
-class AudioContext:
-    """Unified context manager for both speaking and listening"""
-    def __init__(self, audio_state: AudioStateManager, mode: AudioMode, 
-                 wait_for_idle: bool = True):
-        self.audio_state = audio_state
-        self.mode = mode
-        self.wait_for_idle = wait_for_idle
-    
-    def __enter__(self):
-        if self.wait_for_idle:
-            if self.mode == AudioMode.SPEAKING:
-                self.audio_state.wait_until_idle(timeout=5.0)
-            else:  # LISTENING
-                self.audio_state.wait_until_not_speaking(timeout=10.0)
-        
-        self.audio_state.set_mode(self.mode)
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.audio_state.set_mode(AudioMode.IDLE)
-        return False
-
-# Usage:
-# with AudioContext(state, AudioMode.SPEAKING):
-#     speak(text)
-# TODO: Implement 

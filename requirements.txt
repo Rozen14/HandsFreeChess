@@ -1,0 +1,12 @@
+python-chess==1.999
+pygame==2.6.1
+requests==2.32.3
+sentence-transformers==3.3.1
+faster-whisper==1.1.0
+numpy==1.26.4
+scipy==1.14.1
+edge-tts==6.1.19
+sounddevice==0.5.1
+pydub==0.25.1
+pyaudio==0.2.14
+SpeechRecognition==3.11.0

@@ -1,5 +1,6 @@
 from voice_input import speech_to_text as stt
-from voice_output.text_to_speech import TextToSpeech
+from voice_output.atomic_cache import AtomicPhraseCache
+from voice_output.streaming_tts import StreamingTTS
 from utils.audio_state import AudioStateManager
 # TODO: Remove prints for proper logging
 
@@ -30,23 +31,19 @@ def setup_microphone():
 
 
 def setup_audio_components(mic_index=None):
-    """
-    Initialize audio components with shared state manager.
-    
-    Args:
-        mic_index: Microphone index (None for default)
-        
-    Returns:
-        Tuple of (recognizer, tts, audio_state)
-    """
     audio_state = AudioStateManager()
-    
+
     recognizer = stt.SpeechRecognizer(
         mic_index=mic_index,
-        phrase_time_limit=4,
-        audio_state=audio_state
+        audio_state=audio_state,
     )
-    
-    tts = TextToSpeech(audio_state=audio_state)
-    
-    return recognizer, tts, audio_state
+
+    cache = AtomicPhraseCache()
+    cache.cache_vocabulary()
+
+    tts = StreamingTTS(
+        cache=cache,
+        audio_state=audio_state,
+    )
+
+    return recognizer, tts, cache, audio_state

@@ -7,6 +7,7 @@ import logging # TODO: Remove prints for proper logging
 import time
 import tempfile
 
+
 from config import constants
 from utils.audio_state import AudioStateManager, AudioContext, AudioMode
 # TODO: add interface for microphone selection
@@ -225,5 +226,3 @@ class SpeechRecognizer:
                 os.remove("temp.wav")
             except Exception as e:
                 print(f"Could not remove temp.wav: {e}")
-    
-    

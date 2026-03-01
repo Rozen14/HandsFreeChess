@@ -1,0 +1,9 @@
+services:
+  app:
+    build: .
+    container_name: handsfreechess
+    volumes:
+      - .:/workspace
+    stdin_open: true
+    tty: true
+    command: python main.py
