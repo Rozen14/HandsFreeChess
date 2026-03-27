@@ -31,7 +31,7 @@ def run_local_game():
     cache.wait_for_cache_ready(timeout=30)
 
     game = gi.GameState(player_color="white")
-    board_view = SimpleBoardVisualizer()
+    board_view = SimpleBoardVisualizer(audio_state=audio_state)
 
     controller = vgc.GameController(
         game,
@@ -93,7 +93,7 @@ def run_stockfish_game():
 
     # Initialize game components
     game = gi.GameState(player_color="white")
-    board_view = SimpleBoardVisualizer()
+    board_view = SimpleBoardVisualizer(audio_state=audio_state)
     stockfish = StockfishOpponent(str(stockfish_path), skill_level=skill_level, time_limit=constants.DEFAULT_THINK_TIME)
 
     controller = vgc.GameController(

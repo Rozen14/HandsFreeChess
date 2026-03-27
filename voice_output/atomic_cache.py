@@ -90,6 +90,8 @@ class AtomicPhraseCache:
             "game started", "you are white", "make your move",
             "waiting for opponent", "timed out", "nothing to repeat",
             "game over", "which side",
+            "you", "resign", "new", "game",
+            "rematch", "draw", "offered", "declined",
         ],
         AtomCategory.ERROR: [
             "illegal", "not legal", "ambiguous",

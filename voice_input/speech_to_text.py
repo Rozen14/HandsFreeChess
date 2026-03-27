@@ -101,7 +101,7 @@ class SpeechRecognizer:
     def __init__(
         self,
         mic_index: Optional[int] = None,
-        model_name: str = "Systran/faster-whisper-tiny.en",
+        model_name: str = "Systran/faster-whisper-base.en",
         device: str = "cpu",
         compute_type: str = "int8",
         phrase_time_limit: float = 4,
@@ -176,13 +176,17 @@ class SpeechRecognizer:
                     tmp_path = tmp.name
                     try:
                         segments, info = self.model.transcribe(
-                            tmp.name,                                                            
+                            tmp.name,
                             vad_filter=True,
                             vad_parameters={
                                 # "min_silence_duration_ms": 300
                             },
-                            beam_size=1,
-                            best_of=1
+                            beam_size=3,
+                            best_of=1,
+                            initial_prompt="Chess game voice commands: knight to f3, \
+                                queen takes d4, bishop b5, rook e1, pawn e4, castle kingside, castle queenside, en passant, \
+                                promotes to queen, check, checkmate, resign, offer draw, accept draw, repeat, new game, \
+                                rematch, time, how much time, material, positions, what's my elo",
                         )
                         
                         text = "".join(segment.text for segment in segments).strip()

@@ -78,6 +78,7 @@ class GameController:
         elif intent_type == "positions":
             return self._handle_positions()
         else:
+            print(f"Unrecognized intent for: {text}")
             self._speak_and_wait(self.planner.plan_error("not_understood"))
             return True
     
@@ -106,6 +107,7 @@ class GameController:
 
         # TODO: When a move is repeated it defaults to this...
         if parsed.result == MoveParseResult.NOT_UNDERSTOOD:
+            print(f"Not understood: '{text}'")
             self._speak_and_wait(self.planner.plan_error("not_understood"))
             return True
 
@@ -114,6 +116,7 @@ class GameController:
             return True
 
         if parsed.result == MoveParseResult.INVALID:
+            print(f"Illegal move attempt: '{text}' -> '{parsed.uci}'")
             self._speak_and_wait(self.planner.plan_error("illegal"))
             return True
 
@@ -131,12 +134,10 @@ class GameController:
             self._speak_and_wait(plan)
             self.last_announcement = str(plan)
 
-            # Visualize board
+            # Visualize board with last move highlight
             if self.board_view and self.opponent_type != OT.ONLINE:
+                self.board_view.set_last_move(move)
                 self.board_view.render()
-
-            # Check for check (already included in plan_move, but announce separately if needed)
-            # plan_move already appends "check" token, so skip separate announcement
 
             # Check for game over
             if self.game.is_game_over():
@@ -175,8 +176,9 @@ class GameController:
             self._speak_and_wait(plan)
             self.last_announcement = str(plan)
 
-            # Visualize board
+            # Visualize board with last move highlight
             if self.board_view and self.opponent_type != OT.ONLINE:
+                self.board_view.set_last_move(move)
                 self.board_view.render()
 
             # Check for game over
@@ -193,20 +195,33 @@ class GameController:
         return True
             
     def _handle_resign(self) -> bool:
-        """"""
-        pass
-        
+        """Handle player resignation."""
+        winner = "black" if self.game.player_color == chess.WHITE else "white"
+        self._speak_and_wait(["you", "resign"])
+        self._speak_and_wait(["game over"])
+        print(f"Player resigned. {winner} wins.")
+        return False
+
     def _handle_draw_offer(self) -> bool:
-        """"""
-        pass
-    
+        """Handle draw offer — against engine, auto-decline."""
+        if self.opponent_type == OT.STOCKFISH:
+            self._speak_and_wait(["draw", "declined"])
+        else:
+            # TODO: Wire up to online API or human opponent
+            self._speak_and_wait(["draw", "offered"])
+        return True
+
     def _handle_new_game(self) -> bool:
-        """"""
-        pass
-    
+        """Signal that the player wants a new game."""
+        self._speak_and_wait(["new", "game"])
+        # Return False to exit the listen loop — caller should start a new game
+        return False
+
     def _handle_rematch(self) -> bool:
-        """"""
-        pass
+        """Signal that the player wants a rematch."""
+        self._speak_and_wait(["rematch"])
+        # Return False to exit the listen loop — caller should start rematch
+        return False
     
     def _handle_repeat(self) -> bool:
         """"""
@@ -218,9 +233,22 @@ class GameController:
         return True
     
     def _handle_positions(self) -> bool:
-        """"""        
-        piece_map = self.game.board.piece_map()
-        pass
+        """Announce piece positions grouped by color."""
+        board = self.game.board
+        piece_names = self.planner.PIECE_NAMES
+
+        # Announce player's pieces first, then opponent's
+        for color, color_name in [(self.game.player_color, "white" if self.game.player_color == chess.WHITE else "black"),
+                                  (not self.game.player_color, "black" if self.game.player_color == chess.WHITE else "white")]:
+            tokens = [color_name]
+            for square, piece in board.piece_map().items():
+                if piece.color == color:
+                    name = piece_names.get(piece.piece_type, "piece")
+                    sq = chess.square_name(square)
+                    tokens.extend([name, sq])
+            self._speak_and_wait(tokens)
+
+        return True
     
     def end_game(self, result: str, reason):
         # Determine game state from termination reason
@@ -358,8 +386,9 @@ class GameController:
             print(f"DEBUG: Invalid move: {opponent_move}")
             return True
         
-        # 2.2 Visualize opponent move
+        # 2.2 Visualize opponent move with highlight
         if self.board_view and self.opponent_type != OT.ONLINE:
+            self.board_view.set_last_move(chess.Move.from_uci(opponent_move))
             self.board_view.render()
         
         # 3. Announce opponent move
